@@ -1,0 +1,1568 @@
+@import 'tailwindcss';
+
+/*
+ * Picklehouse Matanao design tokens.
+ * Brand colours are sampled from the official logo (deep green, white,
+ * lime pickleball); tints and shades are mixed from them.
+ * Components use these tokens only — never raw hex values.
+ */
+@theme {
+  /* Brand: the logo's deep green */
+  --color-brand-green: #0d5a2b;
+  --color-brand-green-700: #0a4a23;
+  --color-brand-green-800: #083c1c;
+  --color-brand-green-900: #052a13;
+  --color-brand-green-300: #9fcfae;
+  --color-brand-green-200: #cde6d4;
+  --color-brand-green-100: #e7f3ea;
+  --color-brand-green-50: #f4faf5;
+  --color-brand-charcoal: #2f3a34;
+  --color-brand-charcoal-800: #222a25;
+  --color-brand-charcoal-500: #59645d;
+  --color-brand-charcoal-200: #d4dbd6;
+  --color-brand-white: #ffffff;
+  /* Night: near-black green backdrop with leaf and lime glows (big surfaces only) */
+  --color-night: #03120a;
+  /* Midnight green: the dark glass of the guest and staff dashboards */
+  --color-midnight: #0b3a1d;
+  --color-midnight-900: #04200f;
+  --color-night-800: #072414;
+  --color-glow-leaf: #1e8a45;
+  --color-glow-lime: #a9cf24;
+  --color-glow-mint: #3fc79a;
+  /* Peak-hour tags on dark green */
+  --color-gold: #f5c84c;
+  --color-gold-ink: #3a2a00;
+  /* Accent: the logo's lime ball, only for the main call to action and "open / live now" signs */
+  --color-accent: #c6e62c;
+  --color-accent-hover: #d4ee55;
+  --color-accent-ink: #062a12;
+  /* Lighter accent for small marks on dark surfaces (the "Open now" dot, the current-rate outline) */
+  --color-accent-bright: #d7f25a;
+
+  /* Schedule states (derived; maintenance amber is the one non-brand hue) */
+  /* 3D venue view: the hall floor and the hedge sign wall */
+  --color-venue-floor: #c5c8cd;
+  --color-venue-hedge: #1f3a24;
+  --color-slot-maintenance: #b7791f;
+  --color-slot-maintenance-bg: #fdf3e1;
+  --color-slot-taken: #e4e7e9;
+
+  /* Semantic */
+  --color-surface: var(--color-brand-white);
+  --color-ink: var(--color-brand-charcoal);
+  --color-ink-muted: var(--color-brand-charcoal-500);
+  --color-line: var(--color-brand-charcoal-200);
+  --color-focus: var(--color-brand-green-300);
+
+  /* Type */
+  --font-display: 'Outfit Variable', 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --text-display-xl: clamp(2.75rem, 9vw, 6.5rem);
+  --text-display-xl--line-height: 1;
+  --text-display-lg: clamp(2.25rem, 5.5vw, 4rem);
+  --text-display-lg--line-height: 1.04;
+  --text-display-md: clamp(1.75rem, 3.5vw, 2.5rem);
+  --text-display-md--line-height: 1.1;
+  --text-display-sm: 1.5rem;
+  --text-display-sm--line-height: 1.15;
+  --text-lead: 1.1875rem;
+  --text-lead--line-height: 1.6;
+
+  /* Shape */
+  --radius-tile: 1.25rem;
+  --radius-card: 0.875rem;
+  --radius-control: 999px;
+
+  /* Layout */
+  --container-site: 76rem;
+  --spacing-header: 4.5rem;
+
+  /* Motion */
+  --ease-court: cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-court-draw: court-draw 1.6s var(--ease-court) both;
+  /* Draw in, hold, wipe out the same way, repeat (hero). One cycle = 6s. */
+  --animate-court-loop: court-loop 6s var(--ease-court) infinite both;
+
+  @keyframes court-loop {
+    0% {
+      stroke-dashoffset: 1;
+    }
+    18% {
+      stroke-dashoffset: 0;
+    }
+    68% {
+      stroke-dashoffset: 0;
+      animation-timing-function: cubic-bezier(0.64, 0, 0.78, 0);
+    }
+    87%,
+    100% {
+      stroke-dashoffset: -1;
+    }
+  }
+  --animate-check-pop: check-pop 320ms var(--ease-court) both;
+  --animate-cart-in: cart-in 450ms var(--ease-court) both;
+  --animate-pop-in: pop-in 500ms var(--ease-court) both;
+
+  @keyframes cart-in {
+    from {
+      transform: translateY(1.5rem) scale(0.9);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+  @keyframes pop-in {
+    from {
+      transform: scale(0.96);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+  --animate-tick: tick 500ms var(--ease-court) both;
+  --animate-bell-ring: bell-ring 900ms ease-in-out both;
+
+  @keyframes bell-ring {
+    0%, 100% {
+      transform: rotate(0);
+    }
+    15%, 45% {
+      transform: rotate(14deg);
+    }
+    30%, 60% {
+      transform: rotate(-12deg);
+    }
+    75% {
+      transform: rotate(5deg);
+    }
+  }
+
+  @keyframes tick {
+    from {
+      opacity: 0.2;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes check-pop {
+    from {
+      transform: scale(0.3) rotate(-20deg);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1) rotate(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes court-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+
+  [id] {
+    scroll-margin-top: calc(var(--spacing-header) + 1rem);
+  }
+  /* Phones and tablets: leave room for the homepage section chips too. */
+  @media (width < 64rem) {
+    section[id] {
+      scroll-margin-top: calc(var(--spacing-header) + 3.25rem);
+    }
+  }
+
+  summary {
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+@layer utilities {
+  /* Display type: Outfit, a rounded geometric sans close to the logo's lowercase wordmark. */
+  .font-display {
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+
+  /* Court lines that draw themselves once (hero). Elements need pathLength="1". */
+  .court-draw > * {
+    stroke-dasharray: 1;
+    animation: var(--animate-court-draw);
+  }
+  .court-draw.court-loop > * {
+    animation: var(--animate-court-loop);
+  }
+  .court-draw > :nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .court-draw > :nth-child(3) {
+    animation-delay: 0.3s;
+  }
+  .court-draw > :nth-child(4) {
+    animation-delay: 0.45s;
+  }
+  .court-draw > :nth-child(5) {
+    animation-delay: 0.6s;
+  }
+  .court-draw > :nth-child(n + 6) {
+    animation-delay: 0.75s;
+  }
+
+  /* Diagonal stripes for blocked and maintenance cells */
+  .slot-stripes {
+    background-image: repeating-linear-gradient(
+      135deg,
+      transparent 0 6px,
+      color-mix(in oklab, currentColor 14%, transparent) 6px 8px
+    );
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .court-draw > *,
+    .court-draw.court-loop > * {
+      animation: none;
+      stroke-dasharray: none;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Sign-in background: the homepage court, oversized and moving slowly */
+/* Decorative only. Transform and opacity animations (GPU-composited); */
+/* no React state. Simplified on small screens, still under reduced  */
+/* motion.                                                             */
+/* ------------------------------------------------------------------ */
+@layer components {
+  /* The same calm night as the dark homepage sections (no grain), under the moving court. */
+  .auth-tone {
+    background-color: var(--color-night);
+    background-image:
+      radial-gradient(ellipse 55% 50% at 12% 0%, color-mix(in oklab, var(--color-glow-leaf) 38%, transparent), transparent 72%),
+      linear-gradient(175deg, var(--color-night-800), var(--color-night) 65%);
+  }
+
+  .auth-court {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    will-change: transform;
+  }
+  .auth-court--main {
+    width: max(118vmax, 1150px);
+    transform: translate3d(-36%, -50%, 0) rotate(-7deg);
+    animation: auth-pan-main 46s ease-in-out infinite alternate;
+  }
+  .auth-court--far {
+    width: max(150vmax, 1300px);
+    transform: translate3d(-80%, -55%, 0) rotate(81deg);
+    animation: auth-pan-far 64s ease-in-out infinite alternate;
+  }
+
+  @keyframes auth-pan-main {
+    from { transform: translate3d(-36%, -50%, 0) rotate(-7deg); }
+    to { transform: translate3d(calc(-36% - 4vmax), calc(-50% - 2vmax), 0) rotate(-5deg); }
+  }
+  @keyframes auth-pan-far {
+    from { transform: translate3d(-80%, -55%, 0) rotate(81deg); }
+    to { transform: translate3d(calc(-80% + 5vmax), calc(-55% + 3vmax), 0) rotate(83deg); }
+  }
+
+  /* A short band of pale green light travelling along the boundary and kitchen lines */
+  .auth-sweep > * {
+    stroke-dasharray: 0.07 0.93;
+    stroke-dashoffset: 1;
+    animation: auth-sweep 11s linear infinite;
+  }
+  .auth-sweep > :nth-child(2) { animation-delay: -3.7s; }
+  .auth-sweep > :nth-child(3) { animation-delay: -7.3s; }
+  @keyframes auth-sweep {
+    from { stroke-dashoffset: 1; }
+    to { stroke-dashoffset: 0; }
+  }
+
+  /* A small pickleball crossing part of the court now and then, with a soft trail */
+  .auth-ball {
+    position: absolute;
+    border-radius: 9999px;
+    background:
+      radial-gradient(circle at 30% 30%, var(--color-brand-green-300) 0 9%, transparent 11%),
+      radial-gradient(circle at 68% 34%, var(--color-brand-green-300) 0 9%, transparent 11%),
+      radial-gradient(circle at 50% 70%, var(--color-brand-green-300) 0 9%, transparent 11%),
+      radial-gradient(circle at 34% 30%, white, color-mix(in oklab, white 82%, var(--color-brand-green-200)) 70%);
+    box-shadow: 0 0 18px color-mix(in oklab, var(--color-brand-green-200) 55%, transparent);
+    opacity: 0;
+    will-change: transform, opacity;
+    animation: auth-ball 15s cubic-bezier(0.45, 0.05, 0.35, 1) 2.5s infinite;
+  }
+  .auth-ball--trail {
+    background: var(--color-brand-green-200);
+    box-shadow: none;
+    animation-name: auth-ball-trail;
+  }
+  .auth-ball--t1 { animation-delay: 2.62s; }
+  .auth-ball--t2 { animation-delay: 2.74s; }
+  .auth-ball--t3 { animation-delay: 2.86s; }
+  @keyframes auth-ball {
+    0% { transform: translate3d(0, 0, 0) scale(0.9); opacity: 0; }
+    4% { opacity: 0.9; }
+    16% { transform: translate3d(14vmin, -9vmin, 0) scale(1); }
+    32% { transform: translate3d(30vmin, -2vmin, 0) scale(0.95); opacity: 0.9; }
+    38% { transform: translate3d(34vmin, 1vmin, 0) scale(0.9); opacity: 0; }
+    100% { transform: translate3d(34vmin, 1vmin, 0) scale(0.9); opacity: 0; }
+  }
+  @keyframes auth-ball-trail {
+    0% { transform: translate3d(0, 0, 0) scale(0.6); opacity: 0; }
+    4% { opacity: 0.22; }
+    16% { transform: translate3d(14vmin, -9vmin, 0) scale(0.7); }
+    32% { transform: translate3d(30vmin, -2vmin, 0) scale(0.6); opacity: 0.18; }
+    38% { transform: translate3d(34vmin, 1vmin, 0) scale(0.5); opacity: 0; }
+    100% { transform: translate3d(34vmin, 1vmin, 0) scale(0.5); opacity: 0; }
+  }
+
+  /* Small screens: one court, no light sweep, no ball */
+  @media (max-width: 767px) {
+    .auth-court--far,
+    .auth-sweep,
+    .auth-ball {
+      display: none;
+    }
+    .auth-court--main {
+      width: 200vmax;
+      transform: translate3d(-50%, -50%, 0) rotate(83deg);
+      animation: auth-pan-phone 70s ease-in-out infinite alternate;
+    }
+    @keyframes auth-pan-phone {
+      from { transform: translate3d(-50%, -50%, 0) rotate(83deg); }
+      to { transform: translate3d(-50%, calc(-50% - 6vmax), 0) rotate(85deg); }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .auth-court--main,
+    .auth-court--far {
+      animation: none;
+    }
+    .auth-sweep,
+    .auth-ball {
+      display: none;
+    }
+  }
+}
+
+@layer components {
+  /* A small pickleball marker (open play step progress) */
+  .pickleball {
+    border-radius: 9999px;
+    background:
+      radial-gradient(circle at 30% 30%, var(--color-brand-green-300) 0 9%, transparent 11%),
+      radial-gradient(circle at 68% 34%, var(--color-brand-green-300) 0 9%, transparent 11%),
+      radial-gradient(circle at 50% 70%, var(--color-brand-green-300) 0 9%, transparent 11%),
+      radial-gradient(circle at 34% 30%, white, color-mix(in oklab, white 82%, var(--color-brand-green-200)) 70%);
+    box-shadow: 0 0 0 2px var(--color-brand-green), 0 2px 8px color-mix(in oklab, var(--color-brand-green) 35%, transparent);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Live courts: a doubles rally on a court that is in use (CourtRally) */
+/* Four shots per 3.6s cycle: A (40,60) → B (400,140) → C (40,140) →   */
+/* D (400,60) → A. Ball positions sit just in front of each player.    */
+/* ------------------------------------------------------------------ */
+@layer components {
+  .rally-ball {
+    transform: translate(52px, 60px);
+    animation: rally-travel 3.6s linear infinite;
+  }
+  .rally-ball__lift {
+    animation: rally-lift 3.6s infinite;
+  }
+  .rally-ball__ball {
+    fill: white;
+    stroke: var(--color-brand-green-300);
+    stroke-width: 1.5;
+  }
+  .rally-ball__shadow {
+    fill: var(--color-brand-green-900);
+    opacity: 0.45;
+  }
+  .rally-player {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: rally-hit 3.6s var(--ease-court) infinite;
+  }
+  /* Each player's hit lands when the ball reaches them */
+  .rally-player--b { animation-delay: -2.7s; }
+  .rally-player--c { animation-delay: -1.8s; }
+  .rally-player--d { animation-delay: -0.9s; }
+
+  @keyframes rally-travel {
+    0% { transform: translate(52px, 60px); }
+    25% { transform: translate(388px, 140px); }
+    50% { transform: translate(52px, 140px); }
+    75% { transform: translate(388px, 60px); }
+    100% { transform: translate(52px, 60px); }
+  }
+  /* Up and down once per shot: ease out on the way up, ease in on the way down */
+  @keyframes rally-lift {
+    0%, 25%, 50%, 75%, 100% {
+      transform: translateY(0) scale(1);
+      animation-timing-function: cubic-bezier(0.33, 0.8, 0.5, 1);
+    }
+    12.5%, 37.5%, 62.5%, 87.5% {
+      transform: translateY(-22px) scale(1.45);
+      animation-timing-function: cubic-bezier(0.5, 0, 0.67, 0.2);
+    }
+  }
+  @keyframes rally-hit {
+    0% { transform: scale(1.35); }
+    14%, 100% { transform: scale(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rally-ball,
+    .rally-ball__lift,
+    .rally-player {
+      animation: none;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Night backdrop: deep green-black, a soft green sweep across the   */
+/* top and a lime glow low on the right, with a fine film grain.    */
+/* ------------------------------------------------------------------ */
+:root {
+  --night-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.55 -0.12'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --night-layers:
+    var(--night-grain),
+    radial-gradient(ellipse 60% 70% at 95% 85%, color-mix(in oklab, var(--color-glow-lime) 95%, transparent), transparent 68%),
+    radial-gradient(ellipse 85% 45% at 36% 24%, color-mix(in oklab, var(--color-glow-leaf) 80%, transparent), transparent 72%),
+    radial-gradient(ellipse 40% 55% at 0% 100%, color-mix(in oklab, var(--color-glow-leaf) 60%, transparent), transparent 70%),
+    linear-gradient(165deg, var(--color-night-800) 0%, var(--color-night) 70%);
+  --night-sizes: 160px 160px, auto, auto, auto, auto;
+  /* Dark glass for the phone bottom bar and menu drawer: the homepage's night shade */
+  --vivid-glass-1: color-mix(in oklab, var(--color-night-800) 94%, transparent);
+  --vivid-glass-2: color-mix(in oklab, color-mix(in oklab, var(--color-glow-leaf) 38%, var(--color-night)) 93%, transparent);
+  --vivid-glass-3: color-mix(in oklab, color-mix(in oklab, var(--color-glow-lime) 42%, var(--color-night)) 93%, transparent);
+  --light-glows:
+    radial-gradient(ellipse 45% 55% at 8% 20%, color-mix(in oklab, var(--color-glow-leaf) 22%, transparent), transparent 70%),
+    radial-gradient(ellipse 40% 50% at 92% 85%, color-mix(in oklab, var(--color-glow-lime) 30%, transparent), transparent 70%),
+    radial-gradient(ellipse 35% 40% at 60% 10%, color-mix(in oklab, var(--color-glow-lime) 14%, transparent), transparent 70%);
+}
+
+@layer utilities {
+  /* Book a court: smooth midnight green with two soft lights, no grain, so the glass cards stand out. */
+  .bg-midnight-glow {
+    background-color: var(--color-night);
+    background-image:
+      radial-gradient(60% 45% at 12% 8%, color-mix(in oklab, var(--color-glow-leaf) 42%, transparent), transparent 70%),
+      radial-gradient(55% 40% at 92% 88%, color-mix(in oklab, var(--color-glow-lime) 26%, transparent), transparent 70%),
+      linear-gradient(170deg, var(--color-midnight-900), var(--color-night) 75%);
+  }
+  .bg-night-glow {
+    background-color: var(--color-night);
+    background-image: var(--night-layers);
+    background-size: var(--night-sizes);
+  }
+  /* Dark homepage sections: smooth night with one soft green light behind the
+     headline (top left) and no grain, so prices and headings are the brightest
+     thing on screen. */
+  .bg-night-calm {
+    background-color: var(--color-night);
+    background-image:
+      radial-gradient(ellipse 55% 50% at 12% 0%, color-mix(in oklab, var(--color-glow-leaf) 38%, transparent), transparent 72%),
+      linear-gradient(175deg, var(--color-night-800), var(--color-night) 65%);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Liquid glass buttons (after the iOS 26 Liquid Glass button kit):    */
+/* a frosted body, a bright rim on top, a soft glow inside, a gentle   */
+/* drop shadow. Clear glass sits on dark or glowing surfaces; on white */
+/* the glass is tinted green (main) or frosted white (outline) so it  */
+/* stays readable.                                                     */
+/* ------------------------------------------------------------------ */
+@layer components {
+  .glass-clear,
+  .glass-tint,
+  .glass-light {
+    border: 1px solid transparent;
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    backdrop-filter: blur(14px) saturate(160%);
+    transition:
+      background 150ms ease,
+      box-shadow 150ms ease,
+      transform 150ms ease;
+  }
+  .glass-clear:active,
+  .glass-tint:active,
+  .glass-light:active {
+    transform: scale(0.98);
+  }
+
+  /* Solid accent: the one button a page most wants pressed */
+  .btn-accent {
+    background: var(--color-accent);
+    color: var(--color-accent-ink);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      0 8px 28px color-mix(in oklab, var(--color-accent) 55%, transparent);
+    transition:
+      background 150ms ease,
+      transform 150ms ease;
+  }
+  .btn-accent:hover {
+    background: var(--color-accent-hover);
+  }
+  .btn-accent:active {
+    transform: scale(0.98);
+  }
+
+  /* Clear glass, for dark and glowing surfaces */
+  .glass-clear {
+    color: white;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.2), rgb(255 255 255 / 0.06));
+    border-color: rgb(255 255 255 / 0.4);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.6),
+      inset 0 -1px 1px rgb(255 255 255 / 0.1),
+      inset 0 0 14px rgb(255 255 255 / 0.08),
+      0 10px 28px -14px rgb(0 0 0 / 0.6);
+  }
+  .glass-clear:hover {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0.1));
+  }
+  .glass-clear--strong {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.22));
+    border-color: rgb(255 255 255 / 0.6);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.85),
+      inset 0 -1px 1px rgb(255 255 255 / 0.18),
+      inset 0 0 16px rgb(255 255 255 / 0.14),
+      0 12px 30px -14px rgb(0 0 0 / 0.65);
+  }
+  .glass-clear--strong:hover {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.6), rgb(255 255 255 / 0.3));
+  }
+
+  /* Green-tinted glass, the main action on light surfaces */
+  .glass-tint {
+    color: white;
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--color-brand-green) 72%, white),
+      var(--color-brand-green) 55%,
+      var(--color-brand-green-700)
+    );
+    border-color: rgb(255 255 255 / 0.28);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.55),
+      inset 0 -2px 6px rgb(0 0 0 / 0.2),
+      inset 0 0 14px rgb(255 255 255 / 0.1),
+      0 10px 24px -12px color-mix(in oklab, var(--color-brand-green) 75%, transparent);
+  }
+  .glass-tint:hover {
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--color-brand-green) 64%, white),
+      color-mix(in oklab, var(--color-brand-green) 92%, white) 55%,
+      var(--color-brand-green)
+    );
+  }
+
+  /* Frosted white glass, secondary actions on light surfaces */
+  .glass-light {
+    color: var(--color-brand-green);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.95), color-mix(in oklab, var(--color-brand-green-50) 80%, transparent));
+    border-color: color-mix(in oklab, var(--color-brand-green) 30%, transparent);
+    box-shadow:
+      inset 0 1px 1px white,
+      inset 0 -1px 2px color-mix(in oklab, var(--color-brand-green) 10%, transparent),
+      0 6px 18px -12px color-mix(in oklab, var(--color-brand-green) 60%, transparent);
+  }
+  .glass-light:hover {
+    background: linear-gradient(180deg, white, var(--color-brand-green-100));
+    border-color: color-mix(in oklab, var(--color-brand-green) 45%, transparent);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Liquid glass panel (rates board rows): frosted, rim-lit, with a     */
+/* highlight that follows the pointer (--mx/--my set from JS) and a    */
+/* gentle zoom on hover or keyboard focus.                             */
+/* ------------------------------------------------------------------ */
+@layer components {
+  .glass-panel {
+    position: relative;
+    isolation: isolate;
+    border-radius: var(--radius-tile);
+    border: 1px solid rgb(255 255 255 / 0.22);
+    background: linear-gradient(160deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.03) 60%, rgb(255 255 255 / 0.06));
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    backdrop-filter: blur(16px) saturate(150%);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.4),
+      inset 0 -1px 1px rgb(255 255 255 / 0.06),
+      inset 0 0 24px rgb(255 255 255 / 0.04),
+      0 18px 40px -24px rgb(0 0 0 / 0.7);
+    transform: translateZ(0);
+    transition:
+      transform 450ms var(--ease-court),
+      box-shadow 450ms var(--ease-court),
+      border-color 300ms ease,
+      background 300ms ease,
+      opacity 500ms ease;
+  }
+  /* Soft light that follows the pointer */
+  .glass-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(
+      240px circle at var(--mx, 50%) var(--my, 0%),
+      color-mix(in oklab, var(--color-glow-lime) 30%, transparent),
+      rgb(255 255 255 / 0.06) 45%,
+      transparent 70%
+    );
+    opacity: 0;
+    transition: opacity 300ms ease;
+    pointer-events: none;
+  }
+  .glass-panel:hover,
+  .glass-panel:focus-within {
+    transform: scale(1.03);
+    z-index: 1;
+    border-color: rgb(255 255 255 / 0.4);
+    background: linear-gradient(160deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0.05) 60%, rgb(255 255 255 / 0.1));
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.6),
+      inset 0 -1px 1px rgb(255 255 255 / 0.1),
+      inset 0 0 30px rgb(255 255 255 / 0.07),
+      0 28px 60px -24px rgb(0 0 0 / 0.75),
+      0 0 40px -12px color-mix(in oklab, var(--color-glow-leaf) 55%, transparent);
+  }
+  .glass-panel:hover::before,
+  .glass-panel:focus-within::before {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .glass-panel {
+      transition: none;
+    }
+    .glass-panel:hover,
+    .glass-panel:focus-within {
+      transform: none;
+    }
+  }
+}
+
+/* Light liquid glass: the same panel on light surfaces (open play). */
+@layer components {
+  .glass-backdrop-light {
+    background: var(--light-glows);
+  }
+  /* Light sections: pale green with the same soft glows as open play */
+  .bg-glow-light {
+    background-color: var(--color-brand-green-50);
+    background-image: var(--light-glows);
+  }
+  .glass-panel--light {
+    color: var(--color-brand-charcoal);
+    border-color: rgb(255 255 255 / 0.85);
+    background: linear-gradient(160deg, rgb(255 255 255 / 0.78), rgb(255 255 255 / 0.42) 60%, rgb(255 255 255 / 0.6));
+    box-shadow:
+      inset 0 1px 1px white,
+      inset 0 -1px 1px color-mix(in oklab, var(--color-brand-green) 8%, transparent),
+      inset 0 0 20px rgb(255 255 255 / 0.5),
+      0 14px 34px -22px color-mix(in oklab, var(--color-brand-green) 70%, transparent);
+  }
+  .glass-panel--light::before {
+    background: radial-gradient(
+      220px circle at var(--mx, 50%) var(--my, 0%),
+      color-mix(in oklab, var(--color-glow-lime) 22%, transparent),
+      rgb(255 255 255 / 0.4) 45%,
+      transparent 70%
+    );
+  }
+  .glass-panel--light:hover,
+  .glass-panel--light:focus-within,
+  .glass-panel--active {
+    border-color: white;
+    background: linear-gradient(160deg, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.6) 60%, rgb(255 255 255 / 0.8));
+    box-shadow:
+      inset 0 1px 1px white,
+      inset 0 -1px 1px color-mix(in oklab, var(--color-brand-green) 10%, transparent),
+      inset 0 0 24px rgb(255 255 255 / 0.6),
+      0 22px 48px -22px color-mix(in oklab, var(--color-brand-green) 75%, transparent),
+      0 0 36px -14px color-mix(in oklab, var(--color-glow-lime) 60%, transparent);
+  }
+  /* The step being shown in the walkthrough is lit, but only hover zooms */
+  .glass-panel--active::before {
+    opacity: 0.6;
+  }
+  .glass-track {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.7), rgb(255 255 255 / 0.35));
+    box-shadow:
+      inset 0 1px 2px color-mix(in oklab, var(--color-brand-green) 22%, transparent),
+      0 1px 0 white;
+  }
+}
+
+@layer components {
+  /* Large glass panels light up on hover but do not zoom (easier to read) */
+  .glass-panel--static:hover,
+  .glass-panel--static:focus-within {
+    transform: none;
+  }
+  /* Glass edge for dark cards (player greeting) */
+  .glass-rim {
+    border: 1px solid rgb(255 255 255 / 0.22);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.45),
+      inset 0 0 30px rgb(255 255 255 / 0.05),
+      0 24px 50px -28px color-mix(in oklab, var(--color-glow-leaf) 80%, transparent);
+  }
+}
+
+/* Phone bottom bar: a floating pill of midnight green liquid
+   glass, backlit with a soft luminous glow; the current tab is a lit
+   glass bubble. */
+@layer components {
+  .glass-nav {
+    color: white;
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.03) 45%, rgb(255 255 255 / 0) 65%),
+      linear-gradient(180deg, color-mix(in oklab, var(--color-midnight) 94%, transparent), color-mix(in oklab, var(--color-midnight-900) 96%, transparent));
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgb(255 255 255 / 0.28);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.45),
+      inset 0 -1px 2px rgb(255 255 255 / 0.08),
+      0 14px 34px -12px color-mix(in oklab, var(--color-midnight-900) 85%, transparent);
+  }
+  .glass-nav span,
+  .glass-nav button {
+    text-shadow: 0 1px 2px color-mix(in oklab, var(--color-brand-green-900) 45%, transparent);
+  }
+  .glass-nav__active {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.18));
+    box-shadow:
+      inset 0 1px 1px white,
+      inset 0 0 0 1px rgb(255 255 255 / 0.35),
+      0 0 18px rgb(255 255 255 / 0.35),
+      0 4px 14px -6px color-mix(in oklab, var(--color-brand-green-900) 50%, transparent);
+  }
+}
+
+/* Phone menu drawer: the same midnight green glass, darker towards the bottom */
+@layer components {
+  .glass-drawer {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.03) 30%, rgb(255 255 255 / 0) 50%),
+      radial-gradient(120% 40% at 50% 0%, rgb(255 255 255 / 0.08), transparent 70%),
+      linear-gradient(180deg, color-mix(in oklab, var(--color-midnight) 96%, transparent), color-mix(in oklab, var(--color-midnight-900) 97%, transparent));
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgb(255 255 255 / 0.22);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.4),
+      inset 1px 0 1px rgb(255 255 255 / 0.12),
+      0 24px 50px -16px color-mix(in oklab, var(--color-midnight-900) 80%, transparent);
+  }
+}
+/* Unlayered so it wins over the shared menu item's white pill: the current
+   page in the drawer is a lit glass bubble, like the bottom bar. */
+.glass-drawer a[aria-current='page'] {
+  color: white;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0.14));
+  box-shadow:
+    inset 0 1px 1px white,
+    inset 0 0 0 1px rgb(255 255 255 / 0.3),
+    0 0 18px rgb(255 255 255 / 0.25),
+    0 4px 14px -6px color-mix(in oklab, var(--color-brand-green-900) 50%, transparent);
+  text-shadow: 0 1px 2px color-mix(in oklab, var(--color-brand-green-900) 45%, transparent);
+}
+
+/* Midnight green as liquid glass (greeting card, desktop sidebar, staff tabs):
+   deep green with a glossy top sheen, a bright rim and a soft inner glow. */
+@layer components {
+  .glass-green {
+    background-color: var(--color-midnight);
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0.03) 38%, rgb(255 255 255 / 0) 60%),
+      radial-gradient(120% 70% at 50% 0%, color-mix(in oklab, var(--color-brand-green-300) 14%, transparent), transparent 70%),
+      linear-gradient(160deg, var(--color-midnight), var(--color-midnight-900));
+    border: 1px solid rgb(255 255 255 / 0.2);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.5),
+      inset 0 -2px 6px rgb(0 0 0 / 0.18),
+      inset 0 0 40px rgb(255 255 255 / 0.05),
+      0 24px 50px -26px color-mix(in oklab, var(--color-midnight-900) 90%, transparent);
+  }
+  /* Full-height sidebar: a rim on its inner edge instead of all round */
+  .glass-green--edge {
+    border-width: 0 1px 0 0;
+    box-shadow:
+      inset -1px 0 1px rgb(255 255 255 / 0.25),
+      inset 0 1px 1px rgb(255 255 255 / 0.35),
+      inset 0 0 60px rgb(255 255 255 / 0.04),
+      8px 0 30px -18px color-mix(in oklab, var(--color-midnight-900) 80%, transparent);
+  }
+}
+
+/* Liquid glass clock (Live courts): green glass panel in the logo's shade,
+   seven-segment digits that glow when lit and show faintly when off. */
+@layer components {
+  .glass-clock {
+    border-radius: var(--radius-tile);
+    border: 1px solid rgb(255 255 255 / 0.3);
+    background:
+      radial-gradient(120% 80% at 20% 0%, rgb(255 255 255 / 0.18), transparent 60%),
+      linear-gradient(160deg, color-mix(in oklab, var(--color-brand-green) 78%, white), var(--color-brand-green) 55%, var(--color-brand-green-800));
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    backdrop-filter: blur(16px) saturate(160%);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.6),
+      inset 0 -2px 8px rgb(0 0 0 / 0.22),
+      inset 0 0 36px rgb(255 255 255 / 0.08),
+      0 22px 44px -22px color-mix(in oklab, var(--color-brand-green) 85%, transparent);
+  }
+  .clock-seg {
+    fill: rgb(255 255 255 / 0.09);
+    transition: fill 200ms ease;
+  }
+  .clock-seg--on {
+    fill: var(--color-brand-green-50);
+    filter: drop-shadow(0 0 4px color-mix(in oklab, var(--color-brand-green-200) 90%, transparent))
+      drop-shadow(0 0 10px color-mix(in oklab, var(--color-brand-green-300) 55%, transparent));
+  }
+  .clock-dot {
+    display: block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: var(--color-brand-green-50);
+    box-shadow: 0 0 8px var(--color-brand-green-200);
+  }
+  .clock-dot--sm {
+    width: 0.25rem;
+    height: 0.25rem;
+  }
+}
+
+/* Sign-in, registration and password screens: a see-through midnight green
+   glass card over the court background. The shared form controls are made for
+   light pages, so inside the card their colours are switched for dark glass.
+   Unlayered, so these win over the utility classes they adjust. */
+.auth-glass {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.02) 35%, rgb(255 255 255 / 0) 60%),
+    color-mix(in oklab, var(--color-midnight-900) 58%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.35),
+    0 30px 80px -24px color-mix(in oklab, var(--color-night) 85%, transparent);
+}
+:is(.auth-glass, .on-glass, .player-night) .text-brand-charcoal {
+  color: white;
+}
+:is(.auth-glass, .on-glass, .player-night) .text-brand-charcoal-500 {
+  color: rgb(255 255 255 / 0.72);
+}
+:is(.auth-glass, .on-glass, .player-night) .text-brand-green {
+  color: var(--color-brand-green-200);
+}
+:is(.auth-glass, .on-glass, .player-night) .text-red-700 {
+  color: color-mix(in oklab, var(--color-red-700) 40%, white);
+}
+:is(.auth-glass, .on-glass, .player-night) .border-line,
+:is(.auth-glass, .on-glass, .player-night) .border-brand-green-100 {
+  border-color: rgb(255 255 255 / 0.15);
+}
+:is(.auth-glass, .on-glass, .player-night) input:not([type='checkbox']),
+:is(.auth-glass, .on-glass, .player-night) select,
+:is(.auth-glass, .on-glass, .player-night) textarea {
+  background-color: rgb(255 255 255 / 0.1);
+  border-color: rgb(255 255 255 / 0.25);
+  color: white;
+}
+:is(.auth-glass, .on-glass, .player-night) input::placeholder {
+  color: rgb(255 255 255 / 0.5);
+}
+:is(.auth-glass, .on-glass, .player-night) input:focus,
+:is(.auth-glass, .on-glass, .player-night) select:focus {
+  border-color: var(--color-brand-green-200);
+}
+:is(.auth-glass, .on-glass, .player-night) select option {
+  color: var(--color-brand-charcoal);
+}
+/* Account tabs: a glass track with a white pill for the current tab */
+:is(.auth-glass, .on-glass, .player-night) .bg-brand-green-50 {
+  background-color: rgb(255 255 255 / 0.1);
+}
+:is(.auth-glass, .on-glass, .player-night) .bg-white.text-brand-green {
+  color: var(--color-brand-green);
+}
+
+/* Light panels placed on glass (Book a court cart): muted text, rules and alerts for dark. */
+.on-glass {
+  --section-muted: rgb(255 255 255 / 0.72);
+  --section-rule: rgb(255 255 255 / 0.15);
+}
+.on-glass .bg-red-50 {
+  background-color: color-mix(in oklab, var(--color-red-700) 30%, transparent);
+  color: white;
+}
+.on-glass .bg-emerald-50 {
+  background-color: color-mix(in oklab, var(--color-emerald-700) 30%, transparent);
+  color: white;
+}
+
+/* ------------------------------------------------------------------ */
+/* Player area: the Book a court look on every page. The pages are    */
+/* built from light surfaces (white cards, pale green boxes, green       */
+/* rules); inside .player-night they become green glass with white    */
+/* text. Public pages that share components keep their light look.     */
+/* No backdrop blur here: the glow behind is smooth, so a tinted fill  */
+/* reads the same and keeps long lists fast on phones.                 */
+/* ------------------------------------------------------------------ */
+.player-night {
+  color: white;
+  --section-muted: rgb(255 255 255 / 0.72);
+  --section-rule: rgb(255 255 255 / 0.16);
+}
+/* Page titles in white, as on Book a court */
+.player-night h1.text-brand-green {
+  color: white;
+}
+/* Page sections sit straight on the glow */
+.player-night section.bg-brand-green-50 {
+  background-color: transparent;
+}
+/* Cards, lists, tables and forms */
+.player-night .bg-white:not(.text-brand-green) {
+  border-color: rgb(255 255 255 / 0.16);
+  background:
+    linear-gradient(160deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.03) 55%, rgb(255 255 255 / 0.05)),
+    color-mix(in oklab, var(--color-midnight) 62%, transparent);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.28),
+    0 24px 50px -32px rgb(0 0 0 / 0.8);
+  color: white;
+}
+/* Boxes inside cards, the green badge and hover fills */
+.player-night .bg-brand-green-50,
+.player-night .bg-brand-green-100 {
+  background-color: rgb(255 255 255 / 0.1);
+}
+.player-night .hover\:bg-brand-green-50:hover,
+.player-night .hover\:bg-brand-green-100:hover {
+  background: rgb(255 255 255 / 0.16);
+}
+.player-night .text-brand-green-800 {
+  color: var(--color-brand-green-100);
+}
+/* Chosen chip or tab, dark badge: solid white, like a time in the cart */
+.player-night .bg-brand-charcoal {
+  background-color: white;
+  color: var(--color-brand-green);
+}
+/* Rules and outlines */
+.player-night .border-brand-green-200,
+.player-night .divide-brand-green-100 > :not(:last-child) {
+  border-color: rgb(255 255 255 / 0.15);
+}
+.player-night .border-brand-green {
+  border-color: var(--color-brand-green-300);
+}
+.player-night .hover\:border-brand-green:hover {
+  border-color: rgb(255 255 255 / 0.45);
+}
+.player-night .text-red-800 {
+  color: color-mix(in oklab, var(--color-red-700) 35%, white);
+}
+.player-night .border-red-200 {
+  border-color: color-mix(in oklab, var(--color-red-700) 55%, transparent);
+}
+.player-night .bg-red-50 {
+  background-color: color-mix(in oklab, var(--color-red-700) 30%, transparent);
+  color: white;
+}
+.player-night .bg-emerald-50 {
+  background-color: color-mix(in oklab, var(--color-emerald-700) 30%, transparent);
+  color: white;
+}
+.player-night :is(.text-emerald-900, .text-red-900) {
+  color: white;
+}
+/* Outline buttons: clear glass instead of frosted white */
+.player-night .glass-light {
+  color: white;
+  border-color: rgb(255 255 255 / 0.3);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.05));
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.35);
+}
+.player-night .glass-light:hover {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.24), rgb(255 255 255 / 0.1));
+  border-color: rgb(255 255 255 / 0.5);
+}
+
+/* A thin, faint scroll bar for strips on dark backgrounds (no white track). */
+.scrollbar-faint {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.25) transparent;
+}
+.scrollbar-faint::-webkit-scrollbar {
+  height: 4px;
+}
+.scrollbar-faint::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-faint::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.25);
+}
+
+/* TV court board: near-black midnight green with one soft logo-green glow,
+   and quiet frosted-glass tiles. */
+.board-bg {
+  background:
+    radial-gradient(70% 45% at 50% -10%, color-mix(in oklab, var(--color-brand-green) 45%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--color-midnight-900), var(--color-night));
+  background-color: var(--color-night);
+}
+.board-glass {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.03));
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 20px 50px -30px rgb(0 0 0 / 0.8);
+}
+
+/* ------------------------------------------------------------------ */
+/* Book a court: dark green glass court cards and time pills.         */
+/* Open times are frosted white glass, times in the cart solid white,  */
+/* booked and past times faint and dashed. Peak is a gold tag.         */
+/* ------------------------------------------------------------------ */
+@layer components {
+  .court-card {
+    border-radius: 1.75rem;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    background:
+      linear-gradient(160deg, rgb(255 255 255 / 0.11), rgb(255 255 255 / 0.03) 55%, rgb(255 255 255 / 0.05)),
+      color-mix(in oklab, var(--color-midnight) 55%, transparent);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    backdrop-filter: blur(18px) saturate(150%);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.35),
+      inset 0 0 30px rgb(255 255 255 / 0.04),
+      0 24px 50px -30px rgb(0 0 0 / 0.8);
+  }
+  .time-pill {
+    display: flex;
+    min-height: 3.25rem;
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid rgb(255 255 255 / 0.24);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.05));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25);
+    color: white;
+    font-weight: 600;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+  }
+  button.time-pill:hover {
+    border-color: rgb(255 255 255 / 0.5);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.22), rgb(255 255 255 / 0.09));
+  }
+  button.time-pill:active {
+    transform: scale(0.97);
+  }
+  .time-pill--selected,
+  button.time-pill--selected:hover {
+    border-color: white;
+    background: white;
+    color: var(--color-brand-green);
+    box-shadow: 0 0 22px -6px color-mix(in oklab, var(--color-glow-lime) 70%, transparent);
+  }
+  .time-pill--mine {
+    border-color: var(--color-brand-green-300);
+    background: color-mix(in oklab, var(--color-brand-green-300) 30%, transparent);
+  }
+  .time-pill--off {
+    border-style: dashed;
+    border-color: rgb(255 255 255 / 0.18);
+    background: transparent;
+    box-shadow: none;
+    color: rgb(255 255 255 / 0.45);
+    font-weight: 500;
+  }
+  .peak-tag {
+    border-radius: 0.375rem;
+    background: var(--color-gold);
+    color: var(--color-gold-ink);
+    font-weight: 600;
+  }
+  /* 3D venue view. Sizes are in cqi so the whole scene scales with its box. */
+  .venue-stage {
+    --venue-tilt: 62deg;
+    --venue-spin: 13deg;
+    --venue-zoom: 1;
+    position: relative;
+    /* Sideways drags turn the scene; up-and-down swipes still scroll the page. */
+    touch-action: pan-y;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    container-type: inline-size;
+    aspect-ratio: 3 / 2;
+    overflow: hidden;
+    border-radius: var(--radius-tile);
+    perspective: 105cqi;
+    perspective-origin: 50% 0%;
+    /* Roof lights over a dark hall. */
+    background:
+      radial-gradient(ellipse 5cqi 1.2cqi at 22% 7%, rgb(255 255 255 / 0.9), transparent),
+      radial-gradient(ellipse 5cqi 1.2cqi at 50% 5%, rgb(255 255 255 / 0.9), transparent),
+      radial-gradient(ellipse 5cqi 1.2cqi at 78% 7%, rgb(255 255 255 / 0.9), transparent),
+      radial-gradient(ellipse 22cqi 9cqi at 22% 7%, color-mix(in oklab, var(--color-glow-leaf) 35%, transparent), transparent),
+      radial-gradient(ellipse 22cqi 9cqi at 50% 5%, color-mix(in oklab, var(--color-glow-leaf) 35%, transparent), transparent),
+      radial-gradient(ellipse 22cqi 9cqi at 78% 7%, color-mix(in oklab, var(--color-glow-leaf) 35%, transparent), transparent),
+      repeating-linear-gradient(96deg, transparent 0 9cqi, color-mix(in oklab, white 6%, transparent) 9cqi 9.4cqi),
+      var(--color-night);
+  }
+  .venue-stage--dragging {
+    cursor: grabbing;
+  }
+  .venue-stage--dragging .venue-floor,
+  .venue-stage--dragging .venue-label {
+    transition: none;
+  }
+  /* The frame around the stage decides its shape: wide when there is room. */
+  .venue-frame {
+    container-type: inline-size;
+  }
+  @container (min-width: 36rem) {
+    .venue-stage {
+      aspect-ratio: 2 / 1;
+    }
+    .venue-stage--compact {
+      aspect-ratio: 5 / 2;
+    }
+  }
+  .venue-floor {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 124cqi;
+    height: 80cqi;
+    margin: -36cqi 0 0 -62cqi;
+    transform-origin: 50% 33cqi;
+    scale: calc(0.84 * var(--venue-zoom));
+    transform: rotateX(var(--venue-tilt)) rotateZ(var(--venue-spin));
+    transform-style: preserve-3d;
+    transition:
+      transform 0.25s ease-out,
+      scale 0.25s ease-out;
+    background:
+      radial-gradient(ellipse 22% 30% at 24% 30%, rgb(255 255 255 / 0.45), transparent 70%),
+      radial-gradient(ellipse 22% 30% at 51% 55%, rgb(255 255 255 / 0.4), transparent 70%),
+      radial-gradient(ellipse 22% 30% at 78% 35%, rgb(255 255 255 / 0.4), transparent 70%),
+      linear-gradient(180deg, color-mix(in oklab, var(--color-venue-floor) 70%, var(--color-night)), var(--color-venue-floor) 45%);
+  }
+  .venue-wall {
+    position: absolute;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 1.1cqi, rgb(11 6 22 / 0.22) 1.1cqi 1.3cqi),
+      linear-gradient(180deg, var(--color-brand-charcoal-800), var(--color-brand-charcoal-500));
+    pointer-events: none;
+  }
+  .venue-wall--back {
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 30cqi;
+    transform-origin: 50% 100%;
+    transform: rotateX(-90deg);
+  }
+  .venue-wall--left {
+    top: 0;
+    bottom: 0;
+    right: 100%;
+    width: 30cqi;
+    transform-origin: 100% 50%;
+    transform: rotateY(90deg);
+    background:
+      repeating-linear-gradient(0deg, transparent 0 1.1cqi, rgb(11 6 22 / 0.22) 1.1cqi 1.3cqi),
+      linear-gradient(90deg, var(--color-brand-charcoal-800), var(--color-brand-charcoal-500));
+  }
+  .venue-hedge {
+    position: absolute;
+    top: 12cqi;
+    bottom: 0;
+    left: 46%;
+    width: 34cqi;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--color-glow-lime) 30%, transparent), transparent 60%),
+      var(--color-venue-hedge);
+  }
+  .venue-hedge img {
+    width: 10cqi;
+    height: 10cqi;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 0 2cqi color-mix(in oklab, var(--color-glow-lime) 80%, transparent);
+  }
+  .venue-court {
+    position: absolute;
+    top: 9cqi;
+    left: calc(17cqi + var(--venue-slot) * 34.5cqi);
+    width: 21cqi;
+    height: 46.2cqi;
+    box-shadow: 0 0 3cqi rgb(11 6 22 / 0.25);
+    padding: 0;
+    cursor: pointer;
+    transform-style: preserve-3d;
+    transition: transform 0.2s ease-out;
+  }
+  .venue-court:hover,
+  .venue-court--selected {
+    transform: translateZ(1.2cqi);
+  }
+  .venue-court:focus-visible {
+    outline: 0.6cqi solid var(--color-focus);
+    outline-offset: 0.6cqi;
+  }
+  .venue-court-surface {
+    fill: var(--color-brand-green);
+    box-shadow: 0 0 0 0 transparent;
+    transition: fill 0.2s;
+  }
+  .venue-court--open .venue-court-surface {
+    fill: color-mix(in oklab, var(--color-glow-leaf) 45%, var(--color-brand-green));
+  }
+  .venue-court--busy .venue-court-surface {
+    fill: var(--color-brand-green-700);
+  }
+  .venue-court--off .venue-court-surface {
+    fill: color-mix(in oklab, var(--color-brand-green-800) 60%, var(--color-brand-charcoal));
+  }
+  .venue-court--selected .venue-court-surface {
+    outline: 0.7cqi solid white;
+    outline-offset: 0.5cqi;
+  }
+  .venue-net {
+    position: absolute;
+    left: -1.6cqi;
+    right: -1.6cqi;
+    top: 50%;
+    height: 3.6cqi;
+    margin-top: -3.6cqi;
+    transform-origin: 50% 100%;
+    transform: rotateX(-90deg);
+    border-top: 0.4cqi solid white;
+    border-inline: 0.5cqi solid var(--color-night);
+    background:
+      repeating-linear-gradient(90deg, rgb(11 6 22 / 0.75) 0 0.12cqi, transparent 0.12cqi 0.5cqi),
+      repeating-linear-gradient(0deg, rgb(11 6 22 / 0.75) 0 0.12cqi, transparent 0.12cqi 0.5cqi),
+      rgb(11 6 22 / 0.25);
+    pointer-events: none;
+  }
+  /* A court in use: a glow around it (green for a booking, gold for an event) and a rally over the net. */
+  .venue-court--live {
+    --venue-glow: var(--color-glow-lime);
+  }
+  .venue-court--live-event {
+    --venue-glow: var(--color-gold);
+  }
+  .venue-court--live::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    box-shadow:
+      0 0 0 0.5cqi var(--venue-glow),
+      0 0 5cqi 1.6cqi var(--venue-glow);
+    opacity: 0.85;
+    animation: venue-glow 1.8s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  /* The ball's spot on the floor travels baseline to baseline; the ball itself rises and falls above it. */
+  .venue-ball {
+    position: absolute;
+    top: 18%;
+    left: 36%;
+    transform-style: preserve-3d;
+    animation: venue-rally 1.3s linear infinite alternate;
+    animation-delay: calc(var(--venue-slot) * -0.45s);
+    pointer-events: none;
+  }
+  .venue-ball::before,
+  .venue-ball::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+  }
+  .venue-ball::before {
+    width: 2cqi;
+    height: 1.2cqi;
+    translate: -50% -50% 0.05cqi;
+    background: rgb(11 6 22 / 0.35);
+  }
+  .venue-ball::after {
+    width: 2cqi;
+    height: 2cqi;
+    background: var(--color-gold);
+    box-shadow: inset -0.2cqi -0.25cqi 0.3cqi rgb(11 6 22 / 0.3);
+    translate: -50% -50% 1.2cqi;
+    transform: rotateZ(calc(-1 * var(--venue-spin))) rotateX(calc(-1 * var(--venue-tilt)));
+    animation: venue-ball-arc 0.65s ease-out infinite alternate;
+    animation-delay: calc(var(--venue-slot) * -0.45s);
+  }
+  @keyframes venue-glow {
+    from {
+      opacity: 0.25;
+    }
+    to {
+      opacity: 0.95;
+    }
+  }
+  @keyframes venue-rally {
+    to {
+      top: 82%;
+      left: 64%;
+    }
+  }
+  @keyframes venue-ball-arc {
+    to {
+      translate: -50% -50% 7cqi;
+    }
+  }
+  /* The label undoes the floor's tilt and turn, so it always faces the viewer. */
+  .venue-label {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max-content;
+    max-width: 30cqi;
+    padding: 0.35em 0.75em;
+    border-radius: 0.9em;
+    font-size: clamp(0.6875rem, 2.3cqi, 1rem);
+    line-height: 1.25;
+    text-align: center;
+    white-space: nowrap;
+    box-shadow: 0 0.3em 1em rgb(11 6 22 / 0.45);
+    transition: transform 0.25s ease-out;
+    transform: translate(-50%, -50%) translateZ(9cqi) rotateZ(calc(-1 * var(--venue-spin))) rotateX(calc(-1 * var(--venue-tilt)));
+  }
+  .venue-label--selected {
+    outline: 2px solid white;
+    outline-offset: 2px;
+  }
+  .venue-label-extra {
+    display: none;
+    font-size: 0.85em;
+    opacity: 0.8;
+  }
+  @container (min-width: 36rem) {
+    .venue-label-extra {
+      display: block;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .venue-court,
+    .venue-floor,
+    .venue-label {
+      transition: none;
+    }
+    .venue-court--live::before {
+      animation: none;
+    }
+    .venue-ball {
+      display: none;
+    }
+  }
+  /* Home page rate tiles: solid green so they stand off the glass panel. */
+  .rate-tile {
+    border-radius: 1.25rem;
+    border: 1px solid rgb(255 255 255 / 0.28);
+    background:
+      linear-gradient(165deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0) 60%),
+      linear-gradient(180deg, var(--color-brand-green), var(--color-brand-green-800));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      0 10px 24px -12px rgb(0 0 0 / 0.6);
+  }
+  .rate-tile--now {
+    outline: 2px solid var(--color-accent-bright);
+    outline-offset: 2px;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Phones and tablets: no live background blur.                        */
+/* A backdrop blur is redone on every frame while the page scrolls or  */
+/* the court behind it animates, which is what made animations freeze */
+/* on phones. The glass keeps its fill, rim and glow; surfaces that    */
+/* relied on the blur for contrast get a more solid fill instead.     */
+/* Unlayered, so it wins over the glass components above.             */
+/* ------------------------------------------------------------------ */
+@media (max-width: 1023px), (pointer: coarse) {
+  .glass-clear,
+  .glass-tint,
+  .glass-light,
+  .glass-panel,
+  .glass-nav,
+  .glass-drawer,
+  .glass-clock,
+  .court-card,
+  .auth-glass {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .court-card {
+    background:
+      linear-gradient(160deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.02) 55%),
+      color-mix(in oklab, var(--color-midnight-900) 82%, transparent);
+  }
+  .auth-glass {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.02) 35%, rgb(255 255 255 / 0) 60%),
+      color-mix(in oklab, var(--color-midnight-900) 86%, transparent);
+  }
+}
+
+/* Scroll reveal (src/lib/reveal.ts): hidden only when motion is welcome; shown at once otherwise and in print. */
+@layer components {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal-word {
+      display: inline-block;
+    }
+    .reveal-on .reveal-words:not([data-in]) .reveal-word,
+    .reveal-on .reveal-rise:not([data-in]),
+    .reveal-on .reveal-stagger:not([data-in]) > * {
+      opacity: 0;
+      translate: 0 0.3em;
+    }
+    .reveal-on .reveal-rise:not([data-in]),
+    .reveal-on .reveal-stagger:not([data-in]) > * {
+      translate: 0 1.25rem;
+    }
+    .reveal-word,
+    .reveal-rise,
+    .reveal-stagger > * {
+      transition:
+        opacity 0.6s var(--ease-court),
+        translate 0.7s var(--ease-court);
+    }
+    .reveal-word {
+      transition-delay: calc(var(--i, 0) * 70ms);
+    }
+    .reveal-stagger > :nth-child(2) { transition-delay: 70ms; }
+    .reveal-stagger > :nth-child(3) { transition-delay: 140ms; }
+    .reveal-stagger > :nth-child(4) { transition-delay: 210ms; }
+    .reveal-stagger > :nth-child(5) { transition-delay: 280ms; }
+    .reveal-stagger > :nth-child(6) { transition-delay: 350ms; }
+    .reveal-stagger > :nth-child(n + 7) { transition-delay: 420ms; }
+  }
+  @media print {
+    .reveal-word,
+    .reveal-rise,
+    .reveal-stagger > * {
+      opacity: 1 !important;
+      translate: none !important;
+    }
+  }
+}
+
+/* Logo entrance (src/features/entrance): a pure fade. The screen and logo fade
+   in together (0.5s), rest, then fade out (0.6s) while the page underneath
+   fades in (0.5s), so the two blend into one smooth transition. */
+@layer components {
+  /* "backwards": the fade-in lets go of opacity once done, so the fade-out transition can run. */
+  .entrance-overlay {
+    animation: entrance-fade 500ms ease-in-out backwards;
+    transition: opacity 600ms ease-in-out;
+    cursor: pointer;
+  }
+  .entrance-overlay--out {
+    opacity: 0;
+  }
+  .entrance-logo {
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.6),
+      0 0 60px 6px color-mix(in oklab, var(--color-glow-leaf) 55%, transparent);
+  }
+  /* The page under the logo: hidden while the logo shows, then faded in. */
+  .entrance-page {
+    transition: opacity 500ms ease-in-out;
+  }
+  .entrance-page--hidden {
+    opacity: 0;
+  }
+  @keyframes entrance-fade {
+    from {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .entrance-overlay {
+      animation: none;
+    }
+  }
+}

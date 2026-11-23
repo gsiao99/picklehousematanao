@@ -1,0 +1,10 @@
+{
+  "name": "Picklehouse Matanao",
+  "short_name": "Picklehouse",
+  "description": "Pickleball in Matanao, Davao del Sur.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0D5A2B",
+  "icons": []
+}

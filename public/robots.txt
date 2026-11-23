@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /player
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /styleguide
+

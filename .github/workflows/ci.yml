@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint -- --deny-warnings
+      - run: npm test
+      - run: npx vite build
+
+  database:
+    # Throwaway PostgreSQL only: never point these tests at staging or production.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['54322:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '54322'
+      PGUSER: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Migrations, RLS and feature tests
+        run: scripts/local-db/run-tests.sh
+      - name: Upgrade path (migrations applied in stages over existing data)
+        run: python3 scripts/local-db/upgrade-path-test.py
+      - name: Simultaneous booking, registration and queue races
+        run: python3 scripts/local-db/concurrency-test.py
