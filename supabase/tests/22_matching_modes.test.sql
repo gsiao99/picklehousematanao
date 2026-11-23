@@ -4,6 +4,7 @@
 -- Hours, rates and sessions are TEST FIXTURES inside this rolled-back transaction.
 begin;
 select plan(7);
+\ir _fixtures.sql
 
 create function pg_temp.court(_n int) returns uuid language sql stable security definer as
   $$ select id from public.courts where number = _n $$;
@@ -69,6 +70,11 @@ update public.queue_entries set queued_at = clock_timestamp() + interval '1 minu
  where status = 'waiting' and registration_id in (select id from public.event_registrations where guest_name in ('Cid N', 'Dan I'));
 update public.events set queue_matching = 'winners_losers', queue_players_per_game = 2 where id = 'd3000000-0000-4000-8000-000000000001';
 update public.queue_entries set queued_at = clock_timestamp() + interval '2 minutes'
+ where status = 'waiting' and registration_id = (select id from public.event_registrations where guest_name = 'Bea I');
+-- Unlike Social mix, Winners vs losers keeps each level's line, so put Bea in Ann's
+-- line for this check (otherwise Ann's game can only take the Novice players).
+update public.queue_entries set division_id = (select q.division_id from public.queue_entries q join public.event_registrations r on r.id = q.registration_id
+                                                where r.guest_name = 'Ann N' and q.status = 'waiting')
  where status = 'waiting' and registration_id = (select id from public.event_registrations where guest_name = 'Bea I');
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"d1000000-0000-4000-8000-000000000001","role":"authenticated"}', true);

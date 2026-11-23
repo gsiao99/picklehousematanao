@@ -4,6 +4,7 @@
 -- FIXTURES inside this rolled-back transaction, not venue data.
 begin;
 select plan(137);
+\ir _fixtures.sql
 
 -- ---------------------------------------------------------------------------
 -- Fixtures (as postgres)
@@ -38,6 +39,17 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('77777777-7777-4777-8777-777777777777', 'fred@test.local', '{"full_name":"Fred Lim","self_rated_level":"novice"}'),
   ('88888888-8888-4888-8888-888888888888', 'gia@test.local', '{"full_name":"Gia Tan","self_rated_level":"novice"}'),
   ('99999999-9999-4999-8999-999999999999', 'hal@test.local', '{"full_name":"Hal Uy","self_rated_level":"novice"}');
+-- LEGACY until Phase 2: event registration, queue and leaderboard flows still
+-- run on player accounts here. Sign-up no longer creates players or reads
+-- levels, so the player role and levels are set directly.
+insert into public.user_roles (user_id, role)
+select id, 'player' from auth.users where email in ('ana@test.local', 'ben@test.local', 'eva@test.local', 'fred@test.local',
+                                                     'gia@test.local', 'hal@test.local');
+update public.profiles p set self_rated_level = v.l::public.player_level, level = v.l::public.player_level
+from (values ('11111111-1111-4111-8111-111111111111'::uuid, 'low_intermediate'), ('22222222-2222-4222-8222-222222222222', 'novice'),
+             ('66666666-6666-4666-8666-666666666666', 'novice'), ('77777777-7777-4777-8777-777777777777', 'novice'),
+             ('88888888-8888-4888-8888-888888888888', 'novice'), ('99999999-9999-4999-8999-999999999999', 'novice')) v(id, l)
+where p.id = v.id;
 insert into public.user_roles (user_id, role) values
   ('33333333-3333-4333-8333-333333333333', 'staff'),
   ('44444444-4444-4444-8444-444444444444', 'staff'),
@@ -194,9 +206,12 @@ select is((select status::text || '/' || amount_due_centavos from public.registe
   'pending/40000', 'a paid doubles entry is held pending the team fee');
 select is((select category_id from public.event_registrations where event_id = pg_temp.id('open') and division_id = pg_temp.id('mixed')),
   pg_temp.cat('mixed-doubles'), 'the registration records the category of the chosen division');
+reset role;  -- players no longer read bookings directly
 select is((select total_centavos || '/' || payment_status || '/' || status from public.bookings
            where event_id = pg_temp.id('open') and player_id = '11111111-1111-4111-8111-111111111111'),
   '40000/unpaid/confirmed', 'the fee is a slot-less booking paid through the normal payment flow');
+set local role authenticated;
+select pg_temp.as_user('11111111-1111-4111-8111-111111111111');
 select is((select status::text from public.register_for_event(pg_temp.id('open'), pg_temp.id('singles'))), 'confirmed',
   'the same player may also enter another division (free singles)');
 
@@ -235,10 +250,10 @@ select is((select status::text from public.event_registrations where event_id = 
 -- ---------------------------------------------------------------------------
 -- Court assignments and conflicts
 -- ---------------------------------------------------------------------------
-reset role; set local role authenticated;
-select pg_temp.as_user('22222222-2222-4222-8222-222222222222');
-select pg_temp.keep('ben_rental', public.hold_slots(jsonb_build_array(jsonb_build_object('court_id', pg_temp.court(1), 'starts_at', pg_temp.at(14)))));
-select lives_ok($$ select public.confirm_booking(pg_temp.id('ben_rental')) $$, 'a player rents Court 1 at 2:00 PM');
+reset role; set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select lives_ok($$ select public.guest_create_booking(jsonb_build_array(jsonb_build_object('court_id', pg_temp.court(1), 'starts_at', pg_temp.at(14))),
+  'Ben C.', '09170000002') $$, 'a guest rents Court 1 at 2:00 PM');
 
 reset role; set local role authenticated;
 select pg_temp.as_user('44444444-4444-4444-8444-444444444444');
@@ -255,8 +270,12 @@ reset role; set local role authenticated;
 select pg_temp.as_user('66666666-6666-4666-8666-666666666666');
 select is((select status from public.get_court_availability(pg_temp.tday()) where court_number = 2 and starts_at = pg_temp.at(14)),
   'event', 'the availability grid shows the event court as taken');
-select throws_ok($$ select public.hold_slots(jsonb_build_array(jsonb_build_object('court_id', pg_temp.court(2), 'starts_at', pg_temp.at(15)))) $$,
-  '23P01', null, 'a rental cannot take an event court');
+reset role; set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select throws_ok($$ select public.guest_create_booking(jsonb_build_array(jsonb_build_object('court_id', pg_temp.court(2), 'starts_at', pg_temp.at(15))),
+  'Eva S.', '09170000006') $$, '23P01', null, 'a rental cannot take an event court');
+reset role; set local role authenticated;
+select pg_temp.as_user('66666666-6666-4666-8666-666666666666');
 select is((select court_name || ' ' || to_char(starts_at at time zone 'Asia/Manila', 'HH24') from jsonb_to_recordset(
             (select courts from public.get_events('club-open'))) as c(court_name text, starts_at timestamptz) order by court_name limit 1),
   'Court 2 13', 'the public event shows its courts and times');
@@ -393,7 +412,9 @@ select throws_ok($$ select public.join_queue(pg_temp.id('op')) $$, '22023', 'Che
 
 reset role; set local role authenticated;
 select pg_temp.as_user('11111111-1111-4111-8111-111111111111');
-select lives_ok($$ select public.join_queue(pg_temp.id('op')) $$, 'a checked-in player joins the queue');
+-- Checking in at an open play session puts the player in the queue (in check-in order).
+select is((select count(*)::int from public.get_queue(pg_temp.id('op')) where status = 'waiting'), 5,
+  'checking in puts each checked-in player in the queue');
 select throws_ok($$ select public.join_queue(pg_temp.id('op')) $$, '23505', 'You are already in the queue.',
   'a second active queue entry is refused');
 
@@ -403,10 +424,8 @@ select throws_ok($$ insert into public.queue_entries (event_id, player_id) value
 
 set local role authenticated;
 select pg_temp.as_user('44444444-4444-4444-8444-444444444444');
-select lives_ok($$ select public.staff_queue_add(pg_temp.id('op'), p) from unnest(array[
-  '22222222-2222-4222-8222-222222222222', '66666666-6666-4666-8666-666666666666',
-  '77777777-7777-4777-8777-777777777777', '88888888-8888-4888-8888-888888888888']::uuid[]) p $$,
-  'staff add four more players in order');
+select throws_ok($$ select public.staff_queue_add(pg_temp.id('op'), '22222222-2222-4222-8222-222222222222') $$,
+  '23505', null, 'staff cannot add someone who is already in the queue');
 select throws_ok($$ select public.staff_call_next(pg_temp.id('op'), pg_temp.court(2)) $$, '22023', null,
   'players cannot be called to a court that is not reserved for the session');
 select pg_temp.keep('g1', public.staff_call_next(pg_temp.id('op'), pg_temp.court(1)));

@@ -1,6 +1,8 @@
--- Bookings, booking slots and payments: ownership, staff scoping, conflicts.
+-- Bookings, booking slots and payments: guest bookings, staff scoping, conflicts.
+-- Guests never read these tables; they use the token-checked functions.
 begin;
-select plan(27);
+select plan(28);
+\ir _fixtures.sql
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('11111111-1111-4111-8111-111111111111', 'ana.reyes@test.local', '{"full_name":"Ana Reyes"}'),
@@ -14,9 +16,9 @@ insert into public.staff_permissions (user_id, permission) values
   ('44444444-4444-4444-8444-444444444444', 'payments.verify'),
   ('44444444-4444-4444-8444-444444444444', 'schedule.manage');
 
-insert into public.bookings (id, player_id, status, hold_expires_at, total_centavos) values
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'held', now() + interval '15 minutes', 100),
-  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '22222222-2222-4222-8222-222222222222', 'held', now() + interval '15 minutes', 100);
+insert into public.bookings (id, status, hold_expires_at, total_centavos, display_name, guest_phone) values
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'held', now() + interval '15 minutes', 100, 'Ana R.', '09170000001'),
+  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'held', now() + interval '15 minutes', 100, 'Ben C.', '09170000002');
 
 insert into public.booking_slots (booking_id, court_id, slot, kind, status, price_centavos)
 select 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', id,
@@ -29,12 +31,12 @@ from public.courts where number = 3;
 
 insert into public.payments (id, booking_id, method_kind, amount_centavos, reference_no, proof_path, submitted_by)
 values ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'gcash', 100, 'GC-1234567',
-        '11111111-1111-4111-8111-111111111111/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/receipt.jpg',
-        '11111111-1111-4111-8111-111111111111');
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/dddddddd-dddd-4ddd-8ddd-dddddddddddd/receipt.jpg',
+        null);
 
 -- ---- Data rules (as postgres) ---------------------------------------------------------
-select ok((select reference ~ '^DD-[0-9]{6}-[0-9]{4}$' from public.bookings where id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
-  'bookings get a DD-YYMMDD-0000 reference');
+select ok((select reference ~ '^PH-[0-9]{6}-[0-9]{4}$' from public.bookings where id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+  'bookings get a PH-YYMMDD-0000 reference');
 select throws_ok($$ insert into public.booking_slots (booking_id, court_id, slot, kind)
                    select 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', id, tstzrange('2026-11-06 14:00+08', '2026-11-06 15:00+08'), 'rental'
                    from public.courts where number = 1 $$,
@@ -78,17 +80,19 @@ select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select throws_ok('select * from public.bookings', '42501', null, 'visitors cannot read bookings');
 select throws_ok('select * from public.payments', '42501', null, 'visitors cannot read payments');
 
--- ---- Ana (player) ------------------------------------------------------------------------
+-- ---- Ana (signed in, no staff role) -----------------------------------------------------
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}', true);
 
-select is((select count(*)::int from public.bookings), 1, 'a player sees only their own booking');
+select is((select count(*)::int from public.bookings), 0, 'an account without a staff role sees no bookings');
 select is_empty($$ select 1 from public.booking_slots where booking_id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' $$,
-  'a player cannot see another player''s booked slots');
-select is((select count(*)::int from public.payments), 1, 'a player sees their own payment');
+  'an account without a staff role cannot see booked slots');
+select is((select count(*)::int from public.payments), 0, 'an account without a staff role sees no payments');
 select throws_ok($$ insert into public.bookings (player_id) values ('11111111-1111-4111-8111-111111111111') $$,
-  '42501', null, 'a player cannot create bookings directly (only through checkout)');
+  '42501', null, 'nobody creates bookings directly (only through the booking functions)');
+select ok(not exists (select 1 from public.bookings where guest_phone is not null),
+  'guest phone numbers are not visible without a staff role');
 select throws_ok($$ update public.bookings set status = 'confirmed' where id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' $$,
   '42501', null, 'a player cannot confirm their own booking');
 select throws_ok($$ insert into public.booking_slots (booking_id, court_id, slot, kind)

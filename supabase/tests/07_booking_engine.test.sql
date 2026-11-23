@@ -1,8 +1,9 @@
--- Booking engine: availability, holds, confirmation, conflicts, expiry,
--- cancellation, blocks, live view. Hours and rates below are TEST FIXTURES
+-- Booking engine with guest bookings: availability, booking, conflicts,
+-- validation, staff cancellation, blocks, live view. Hours and rates below are TEST FIXTURES
 -- inside this rolled-back transaction, not venue data.
 begin;
-select plan(53);
+select plan(42);
+\ir _fixtures.sql
 
 -- ---------------------------------------------------------------------------
 -- Fixtures (as postgres)
@@ -66,144 +67,104 @@ select is(pg_temp.status_at(2, 24) || ' ' || pg_temp.price_at(2, 24), 'available
 select is(pg_temp.status_at(1, 6), 'unpriced', 'an hour with no rate is shown as unpriced, not given an invented price');
 select is((select count(*)::int from public.get_court_availability(pg_temp.test_day())), 3 * 19,
   'three courts × 19 opening hours are listed');
-select throws_ok($$ select public.hold_slots(jsonb_build_array(pg_temp.slot(1, 14))) $$,
-  '42501', null, 'visitors cannot hold slots');
+-- Guests book as anonymous visitors. pg_temp.book returns the reference and
+-- keeps the token in pg_temp.tokens.
+create temp table tokens (reference text primary key, token text);
+grant all on tokens to public;
+create function pg_temp.book(_slots jsonb, _name text default 'Ana R.', _phone text default '09170000001') returns text
+language plpgsql as $$
+declare _r record;
+begin
+  select * into _r from public.guest_create_booking(_slots, _name, _phone);
+  insert into tokens values (_r.reference, _r.token);
+  return _r.reference;
+end $$;
+grant execute on function pg_temp.book(jsonb, text, text) to public;
+create function pg_temp.bid(_ref text) returns uuid language sql stable security definer as
+  $$ select id from public.bookings where reference = _ref $$;
+grant execute on function pg_temp.bid(text) to public;
 
 -- ---------------------------------------------------------------------------
--- 1. Single slot: hold then confirm (Ana)
+-- 1. Single slot (Ana, a guest)
 -- ---------------------------------------------------------------------------
+select lives_ok($$ select pg_temp.book(jsonb_build_array(pg_temp.slot(1, 14))) $$, 'a guest books one slot');
 reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}', true);
-
-select lives_ok($$ select public.hold_slots(jsonb_build_array(pg_temp.slot(1, 14))) $$, 'a player can hold one slot');
-select ok((select status = 'held' and total_centavos = 25000 and payment_status = 'unpaid'
-                  and hold_expires_at between now() + interval '14 minutes' and now() + interval '16 minutes'
-           from public.bookings where status = 'held'),
-  'the hold is priced by the server and lasts the configured 15 minutes');
-select is(pg_temp.status_at(1, 14), 'in_cart', 'the held slot shows as in the player''s cart');
-select is((select status from public.confirm_booking((select id from public.bookings where status = 'held'))),
-  'confirmed', 'the player can confirm the hold');
-select ok((select reference ~ '^DD-[0-9]{6}-[0-9]{4}$' and status = 'confirmed' and payment_status = 'unpaid'
-           from public.bookings where status = 'confirmed'),
-  'a confirmed booking has a unique reference and its payment status is tracked separately');
-select is(pg_temp.status_at(1, 14), 'mine', 'the player sees the slot as theirs');
+select ok((select status = 'confirmed' and total_centavos = 25000 and payment_status = 'unpaid'
+                  and reference ~ '^PH-[0-9]{6}-[0-9]{4}$' and player_id is null and guest_phone = '09170000001'
+           from public.bookings),
+  'the booking is confirmed at once, priced by the server, with a PH reference and the guest''s phone');
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select is(pg_temp.status_at(1, 14) || '/' || coalesce(pg_temp.price_at(1, 14)::text, 'hidden'), 'pending/hidden',
+  'others see an unpaid booking as pending payment, without its price');
 
 -- ---------------------------------------------------------------------------
 -- 2. Multiple courts and nonconsecutive hours in one booking (Ben)
 -- ---------------------------------------------------------------------------
+select lives_ok($$ select pg_temp.book(jsonb_build_array(pg_temp.slot(2, 14), pg_temp.slot(3, 18), pg_temp.slot(2, 20)), 'Ben C.', '09170000002') $$,
+  'a guest books different courts at nonconsecutive hours at once');
 reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}', true);
-
--- Unpaid bookings show as pending until staff confirm payment (Oct 13 2026).
-select is(pg_temp.status_at(1, 14) || '/' || coalesce(pg_temp.price_at(1, 14)::text, 'hidden'), 'pending/hidden',
-  'another player sees an unpaid booking as pending payment, without its price or owner');
-select lives_ok($$ select public.hold_slots(jsonb_build_array(pg_temp.slot(2, 14), pg_temp.slot(3, 18), pg_temp.slot(2, 20))) $$,
-  'a player can hold different courts at nonconsecutive hours at once');
-select is((select total_centavos from public.bookings where status = 'held'), 90000::bigint,
+select is((select total_centavos from public.bookings where display_name = 'Ben C.'), 90000::bigint,
   'the total is the sum of each hour''s database rate (250 + 350 + 300 pesos)');
-select is((select count(*)::int from public.booking_slots where booking_id = (select id from public.bookings where status = 'held')),
+select is((select count(*)::int from public.booking_slots where booking_id = (select id from public.bookings where display_name = 'Ben C.')),
   3, 'the booking has three separate slots');
-select is((select status from public.confirm_booking((select id from public.bookings where status = 'held'))),
-  'confirmed', 'the multi-slot booking is confirmed');
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
 
 -- ---------------------------------------------------------------------------
--- 3. Same slot twice, and all-or-nothing holds
+-- 3. Same slot twice, and all-or-nothing bookings
 -- ---------------------------------------------------------------------------
-select throws_ok($$ select public.hold_slots(jsonb_build_array(pg_temp.slot(1, 14))) $$,
-  '23P01', 'Court 1 at 2:00 PM was just taken. Remove it and try again.', 'booking an already booked slot is refused');
-select throws_ok($$ select public.hold_slots(jsonb_build_array(pg_temp.slot(1, 15), pg_temp.slot(1, 14))) $$,
-  '23P01', null, 'a hold that includes one taken slot is refused');
-select is(pg_temp.status_at(1, 15), 'available', 'nothing from the refused request is held (all or nothing)');
+select throws_ok($$ select pg_temp.book(jsonb_build_array(pg_temp.slot(1, 14)), 'Cara M.', '09170000003') $$,
+  '23P01', 'Court 1 at 2:00 PM was just taken. Choose another time.', 'booking an already booked slot is refused');
+select throws_ok($$ select pg_temp.book(jsonb_build_array(pg_temp.slot(1, 15), pg_temp.slot(1, 14)), 'Cara M.', '09170000003') $$,
+  '23P01', null, 'a booking that includes one taken slot is refused');
+select is(pg_temp.status_at(1, 15), 'available', 'nothing from the refused request is kept (all or nothing)');
 
 -- Validation
-select throws_ok($$ select public.hold_slots(jsonb_build_array(pg_temp.slot(1, 5))) $$,
+select throws_ok($$ select pg_temp.book(jsonb_build_array(pg_temp.slot(1, 5))) $$,
   '22023', null, 'times outside opening hours are refused');
-select throws_ok($$ select public.hold_slots(jsonb_build_array(pg_temp.slot(1, 6))) $$,
-  '22023', null, 'times with no rate are refused');
-select throws_ok($$ select public.hold_slots(jsonb_build_array(jsonb_build_object('court_id', pg_temp.court(1),
+select throws_ok($$ select pg_temp.book(jsonb_build_array(pg_temp.slot(1, 6))) $$,
+  '22023', null, 'times with no bookable rate are refused');
+select throws_ok($$ select pg_temp.book(jsonb_build_array(jsonb_build_object('court_id', pg_temp.court(1),
                    'starts_at', date_trunc('hour', now()) - interval '1 hour'))) $$,
   '22023', null, 'past times are refused');
-select throws_ok($$ select public.hold_slots(jsonb_build_array(jsonb_build_object('court_id', pg_temp.court(1),
+select throws_ok($$ select pg_temp.book(jsonb_build_array(jsonb_build_object('court_id', pg_temp.court(1),
                    'starts_at', pg_temp.at_hour(14) + interval '31 days'))) $$,
   '22023', null, 'times beyond the booking window are refused');
-select throws_ok($$ select public.hold_slots(jsonb_build_array(jsonb_build_object('court_id', pg_temp.court(1),
+select throws_ok($$ select pg_temp.book(jsonb_build_array(jsonb_build_object('court_id', pg_temp.court(1),
                    'starts_at', pg_temp.at_hour(14) + interval '30 minutes'))) $$,
   '22023', null, 'times not on the hour are refused');
-select throws_ok($$ select public.hold_slots((select jsonb_agg(pg_temp.slot(c, h)) from generate_series(1, 3) c, generate_series(8, 10) h)) $$,
+select throws_ok($$ select pg_temp.book((select jsonb_agg(pg_temp.slot(c, h)) from generate_series(1, 3) c, generate_series(8, 10) h)) $$,
   '22023', 'One booking can hold up to 8 court-hours.', 'the per-booking limit is enforced');
 
--- ---------------------------------------------------------------------------
--- Hold expiry releases the time
--- ---------------------------------------------------------------------------
+-- A rate whose basis is not confirmed (unit null) is shown but not bookable.
 reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}', true);
-select public.hold_slots(jsonb_build_array(pg_temp.slot(1, 16)));
-
+update public.rate_rules set unit = null where label = 'Off-peak';
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select throws_ok($$ select pg_temp.book(jsonb_build_array(pg_temp.slot(1, 9))) $$,
+  '22023', 'Court 1 at 9:00 AM cannot be booked online yet. Contact the club.', 'a rate with no basis cannot be booked');
 reset role;
-update public.bookings set hold_expires_at = now() - interval '1 minute' where status = 'held'
-  and player_id = '11111111-1111-4111-8111-111111111111';
-set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}', true);
-select is(pg_temp.status_at(1, 16), 'available', 'an expired hold no longer blocks the time');
-
-reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}', true);
-select is((select status from public.confirm_booking(
-            (select id from public.bookings where player_id = '11111111-1111-4111-8111-111111111111' and status = 'held'))),
-  'expired', 'confirming after the hold ran out reports it expired instead of confirming');
-
-reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}', true);
-select lives_ok($$ select public.hold_slots(jsonb_build_array(pg_temp.slot(1, 16))) $$,
-  'someone else can then book the released time');
+update public.rate_rules set unit = 'per_court_hour' where label = 'Off-peak';
 
 -- ---------------------------------------------------------------------------
--- 5a. Cancellation policy and release
+-- 4. Staff cancellation (guests cancel through their manage link: test 24)
 -- ---------------------------------------------------------------------------
-reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}', true);
-select throws_ok($$ select public.cancel_booking((select id from public.bookings where status = 'confirmed'), null) $$,
-  '42501', 'Contact the club to cancel a confirmed booking.', 'with no player cancellation policy set, players cannot cancel confirmed bookings');
-
-reset role;
-update public.venue_settings set player_cancel_cutoff_hours = 2;
-set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}', true);
-select lives_ok($$ select public.cancel_booking((select id from public.bookings where status = 'confirmed'), 'Change of plans') $$,
-  'with a cutoff configured, a player can cancel ahead of it');
-select is(pg_temp.status_at(1, 14), 'available', 'a cancelled booking releases its time');
-
-reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}', true);
-select throws_ok($$ select public.cancel_booking((select id from public.bookings
-                   where player_id = '11111111-1111-4111-8111-111111111111' limit 1), 'nope') $$,
-  'P0002', null, 'a player cannot cancel someone else''s booking');
-
-reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"44444444-4444-4444-8444-444444444444","role":"authenticated"}', true);
-select throws_ok($$ select public.cancel_booking((select id from public.bookings
-                   where player_id = '22222222-2222-4222-8222-222222222222' and status = 'confirmed'), 'test') $$,
-  'P0002', null, 'staff without bookings.cancel cannot cancel bookings');
-select isnt_empty($$ select 1 from public.staff_get_schedule(pg_temp.test_day()) where player_name = 'Ben Cruz' $$,
-  'staff can see who booked each slot on the detailed schedule');
+select throws_ok($$ select public.cancel_booking(pg_temp.bid((select reference from tokens order by reference desc limit 1)), 'test') $$,
+  '42501', null, 'staff without bookings.cancel cannot cancel bookings');
+select isnt_empty($$ select 1 from public.staff_get_schedule(pg_temp.test_day()) where player_name = 'Ben C.' and player_phone = '09170000002' $$,
+  'staff see the guest''s name and phone on the detailed schedule');
 
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"33333333-3333-4333-8333-333333333333","role":"authenticated"}', true);
-select throws_ok($$ select public.cancel_booking((select id from public.bookings
-                   where player_id = '22222222-2222-4222-8222-222222222222' and status = 'confirmed'), '') $$,
+select throws_ok($$ select public.cancel_booking((select id from public.bookings where display_name = 'Ben C.'), '') $$,
   '22023', null, 'staff must give a reason to cancel');
-select lives_ok($$ select public.cancel_booking((select id from public.bookings
-                  where player_id = '22222222-2222-4222-8222-222222222222' and status = 'confirmed'), 'Venue closed for repairs') $$,
+select lives_ok($$ select public.cancel_booking((select id from public.bookings where display_name = 'Ben C.'), 'Venue closed for repairs') $$,
   'staff with bookings.cancel can cancel a confirmed booking');
+select is(pg_temp.status_at(2, 14), 'available', 'a cancelled booking releases its time');
 
 -- ---------------------------------------------------------------------------
 -- 5b. Maintenance and private-event blocks
@@ -213,9 +174,9 @@ select lives_ok($$ select public.staff_block_courts(array[pg_temp.court(1), pg_t
   'a schedule manager can block two courts for maintenance');
 select is(pg_temp.status_at(1, 9) || ' ' || pg_temp.status_at(2, 10) || ' ' || pg_temp.status_at(3, 9),
   'maintenance maintenance available', 'the blocked hours show as maintenance and other courts stay open');
-select throws_ok($$ select public.staff_block_courts(array[pg_temp.court(1)], pg_temp.at_hour(16), pg_temp.at_hour(17),
+select throws_ok($$ select public.staff_block_courts(array[pg_temp.court(1)], pg_temp.at_hour(14), pg_temp.at_hour(15),
                    'block', null, 'Coaching') $$,
-  '23P01', null, 'a block cannot be placed over a player''s held or confirmed time');
+  '23P01', null, 'a block cannot be placed over a booked time');
 select lives_ok($$ select public.staff_block_courts(array[pg_temp.court(3)], pg_temp.at_hour(12), pg_temp.at_hour(14),
                   'private_event', 'Company outing', 'Private hire') $$,
   'a schedule manager can reserve a court for a private event');
@@ -225,15 +186,14 @@ select lives_ok($$ select public.staff_remove_block((select slot_id from public.
   'a schedule manager can lift a block');
 select is(pg_temp.status_at(1, 9), 'available', 'lifting the block frees the time');
 
-reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}', true);
-select throws_ok($$ select public.hold_slots(jsonb_build_array(pg_temp.slot(2, 9))) $$,
-  '23P01', null, 'players cannot book over a maintenance block');
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select throws_ok($$ select pg_temp.book(jsonb_build_array(pg_temp.slot(2, 9))) $$,
+  '23P01', null, 'guests cannot book over a maintenance block');
 select throws_ok($$ select public.staff_block_courts(array[pg_temp.court(1)], pg_temp.at_hour(9), pg_temp.at_hour(10),
                    'block', null, 'mine now') $$,
-  '42501', null, 'players cannot block courts');
-select throws_ok('select private.expire_stale_holds()', '42501', null, 'players cannot run internal maintenance functions');
+  '42501', null, 'visitors cannot block courts');
+select throws_ok('select private.expire_stale_holds()', '42501', null, 'visitors cannot run internal maintenance functions');
 
 -- ---------------------------------------------------------------------------
 -- 6. Live court view and change signals
@@ -242,8 +202,8 @@ reset role;
 select ok((select version > 5 from public.schedule_signals where operating_date = pg_temp.test_day()),
   'every schedule change bumps the day''s change signal');
 
-insert into public.bookings (id, player_id, status) values
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'confirmed');
+insert into public.bookings (id, status, display_name, guest_phone) values
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'confirmed', 'Live Guest', '09170000009');
 insert into public.booking_slots (booking_id, court_id, slot, kind, status)
 values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', pg_temp.court(2),
         tstzrange(date_trunc('hour', now()), date_trunc('hour', now()) + interval '1 hour'), 'rental', 'confirmed');
@@ -271,8 +231,8 @@ select is((select string_agg(p.proname, ',' order by p.proname) from pg_proc p j
            where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute')
              and p.proname not in ('plan', 'ok', 'is', 'isnt', 'throws_ok', 'lives_ok', 'is_empty', 'isnt_empty', 'finish')
              and p.proname not like '\_%'),
-  'get_cafe_menu,get_court_availability,get_events,get_gallery,get_live_courts,get_operating_day,get_session_board',
-  'anonymous visitors can call only the public read functions');
+  'get_court_availability,get_events,get_live_courts,get_operating_day,get_session_board,guest_begin_receipt_upload,guest_cancel_booking,guest_create_booking,guest_get_booking,guest_submit_payment',
+  'anonymous visitors can call only the public read functions and the token-checked guest functions');
 
 select * from finish();
 rollback;

@@ -1,6 +1,7 @@
 -- Public venue data, admin-only writes, staff permission scoping, events.
 begin;
 select plan(20);
+\ir _fixtures.sql
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('11111111-1111-4111-8111-111111111111', 'ana.reyes@test.local', '{"full_name":"Ana Reyes"}'),

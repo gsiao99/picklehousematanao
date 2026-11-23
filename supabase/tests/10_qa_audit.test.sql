@@ -2,7 +2,8 @@
 -- CSV report totals, rental check-in, and functions without earlier tests.
 -- All rows are TEST FIXTURES inside this rolled-back transaction.
 begin;
-select plan(69);
+select plan(67);
+\ir _fixtures.sql
 
 -- ---------------------------------------------------------------------------
 -- Schema-wide security inventory
@@ -204,11 +205,7 @@ set local role authenticated;
 select pg_temp.as_user('11111111-1111-4111-8111-111111111111');
 select is((select kind from public.get_my_play_history()), 'court_rental', 'play history: the rental check-in appears for Ana');
 select is((select sessions from public.get_attendance_leaderboard(30) where is_me), 1, 'attendance board: counts Ana''s check-in');
-select is((select count(*)::int from public.get_my_payments()), 0, 'my payments: Ana sees none of Ben''s payments');
-reset role;
-set local role authenticated;
-select pg_temp.as_user('22222222-2222-4222-8222-222222222222');
-select is((select count(*)::int from public.get_my_payments()), 2, 'my payments: Ben sees his two payments');
+-- ("My payments" for player accounts was removed with guest bookings: guests see payments on their manage link.)
 
 -- ---------------------------------------------------------------------------
 -- Queue fixes

@@ -1,9 +1,10 @@
--- Payment amounts: players state what they sent (full payments only); staff
+-- Payment amounts: guests state what they sent (full payments only); staff
 -- count what the receipt shows, so a short receipt leaves the rest due.
 -- Tracing: search by reference number, balances, history, money by method.
 -- Hours, rates and accounts are TEST FIXTURES in this rolled-back transaction.
 begin;
 select plan(16);
+\ir _fixtures.sql
 
 -- ---------------------------------------------------------------------------
 -- Fixtures (as postgres)
@@ -14,35 +15,38 @@ create function pg_temp.at_hour(_h int) returns timestamptz language sql stable 
   $$ select (pg_temp.test_day()::timestamp + make_interval(hours => _h)) at time zone 'Asia/Manila' $$;
 create function pg_temp.slot(_court int, _h int) returns jsonb language sql stable security definer as
   $$ select jsonb_build_object('court_id', (select id from public.courts where number = _court), 'starts_at', pg_temp.at_hour(_h)) $$;
--- Hold and confirm one slot as the current user; returns the booking id.
-create function pg_temp.book(_court int, _h int) returns uuid language plpgsql as $$
-declare _id uuid;
-begin
-  _id := public.hold_slots(jsonb_build_array(pg_temp.slot(_court, _h)));
-  perform public.confirm_booking(_id);
-  return _id;
-end $$;
 create function pg_temp.as_user(_id text) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims', json_build_object('sub', _id, 'role', 'authenticated')::text, true);
 end $$;
--- Upload a proof as the current user (what Supabase Storage does on upload).
-create function pg_temp.upload(_booking uuid, _file text) returns text language plpgsql as $$
-declare _path text := auth.uid()::text || '/' || _booking::text || '/' || _file;
-begin
-  insert into storage.objects (bucket_id, name, owner, owner_id) values ('payment-proofs', _path, auth.uid(), auth.uid()::text);
-  return _path;
-end $$;
--- Booking ids by name, shared across role switches.
-create temp table ids (name text primary key, id uuid);
+-- Guest bookings by name with their manage-link tokens, shared across role switches.
+create temp table ids (name text primary key, id uuid, reference text, token text);
 grant all on ids to public;
 create function pg_temp.id(_name text) returns uuid language sql stable as $$ select id from ids where name = _name $$;
-grant execute on function pg_temp.test_day(), pg_temp.at_hour(int), pg_temp.slot(int, int), pg_temp.book(int, int),
-  pg_temp.as_user(text), pg_temp.upload(uuid, text), pg_temp.id(text) to public;
+create function pg_temp.bid(_ref text) returns uuid language sql stable security definer as
+  $$ select id from public.bookings where reference = _ref $$;
+create function pg_temp.book(_name text, _court int, _h int) returns uuid language plpgsql as $$
+declare _r record;
+begin
+  select * into _r from public.guest_create_booking(jsonb_build_array(pg_temp.slot(_court, _h)), 'Ana R.', '09170000001');
+  insert into ids values (_name, pg_temp.bid(_r.reference), _r.reference, _r.token);
+  return pg_temp.bid(_r.reference);
+end $$;
+create function pg_temp.upload(_name text) returns text language plpgsql as $$
+declare _path text := public.guest_begin_receipt_upload((select reference from ids where name = _name),
+                                                         (select token from ids where name = _name), 'jpg') ->> 'path';
+begin
+  insert into storage.objects (bucket_id, name) values ('payment-proofs', _path);
+  return _path;
+end $$;
+create function pg_temp.pay(_name text, _method uuid, _path text, _refno text, _amount bigint) returns jsonb language sql as $$
+  select public.guest_submit_payment((select reference from ids where name = _name), (select token from ids where name = _name),
+                                     _method, _path, _refno, null, _amount)
+$$;
+grant execute on function pg_temp.test_day(), pg_temp.at_hour(int), pg_temp.slot(int, int), pg_temp.as_user(text), pg_temp.id(text),
+  pg_temp.bid(text), pg_temp.book(text, int, int), pg_temp.upload(text), pg_temp.pay(text, uuid, text, text, bigint) to public;
 
 insert into auth.users (id, email, raw_user_meta_data) values
-  ('11111111-1111-4111-8111-111111111111', 'ana.reyes@test.local', '{"full_name":"Ana Reyes","phone":"09171234567"}'),
-  ('22222222-2222-4222-8222-222222222222', 'ben.cruz@test.local', '{"full_name":"Ben Cruz"}'),
   ('33333333-3333-4333-8333-333333333333', 'carla.mendoza@test.local', '{"full_name":"Carla Mendoza"}'),
   ('44444444-4444-4444-8444-444444444444', 'dan.villanueva@test.local', '{"full_name":"Dan Villanueva"}'),
   ('55555555-5555-4555-8555-555555555555', 'lea.navarro@test.local', '{"full_name":"Lea Navarro"}');
@@ -68,21 +72,21 @@ grant execute on function pg_temp.method(text) to public;
 
 
 -- ---------------------------------------------------------------------------
--- A player must send the full amount
+-- A guest must send the full amount
 -- ---------------------------------------------------------------------------
-reset role;
-set local role authenticated;
-select pg_temp.as_user('11111111-1111-4111-8111-111111111111');
-insert into ids values ('b1', pg_temp.book(1, 14));
-do $$ begin perform pg_temp.upload(pg_temp.id('b1'), 'half.jpg'); end $$;
-select throws_ok($$ select public.submit_payment(pg_temp.id('b1'), pg_temp.method('gcash'),
-  '11111111-1111-4111-8111-111111111111/' || pg_temp.id('b1') || '/half.jpg', 'GC-HALF-1', null, 12500) $$,
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select pg_temp.book('b1', 1, 14);
+create temp table paths as select pg_temp.upload('b1') as path;
+grant all on paths to public;
+select throws_ok($$ select pg_temp.pay('b1', pg_temp.method('gcash'), (select path from paths), 'GC-HALF-1', 12500) $$,
   '22023', null, 'a payment for less than the amount due is refused');
-select lives_ok($$ select public.submit_payment(pg_temp.id('b1'), pg_temp.method('gcash'),
-  '11111111-1111-4111-8111-111111111111/' || pg_temp.id('b1') || '/half.jpg', 'GC-REF-777', null, 25000) $$,
+select lives_ok($$ select pg_temp.pay('b1', pg_temp.method('gcash'), (select path from paths), 'GC-REF-777', 25000) $$,
   'the full amount is accepted');
+reset role;
 select is((select declared_centavos from public.payments where booking_id = pg_temp.id('b1')), 25000::bigint,
-  'the amount the player said they sent is kept');
+  'the amount the guest said they sent is kept');
+set local role authenticated;
 
 -- ---------------------------------------------------------------------------
 -- The receipt shows only half: staff approve what arrived
@@ -99,9 +103,12 @@ select is((select due_centavos from public.staff_booking_balances(array[pg_temp.
 select is((select paid_centavos from public.staff_booking_balances(array[pg_temp.id('b1')])), 12500::bigint,
   'and ₱125 is counted as paid');
 reset role;
-select ok(exists (select 1 from public.notifications where user_id = '11111111-1111-4111-8111-111111111111'
-                  and title = 'Part of your payment received' and body like '%₱125.00 is still due%'),
-  'the player is told how much is still due');
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select ok((select (v ->> 'amount_due_centavos')::bigint = 12500 and v ->> 'payment_status' = 'unpaid'
+           from (select public.guest_get_booking(reference, token) as v from ids where name = 'b1') x),
+  'the guest sees on the manage link that ₱125 is still due');
+reset role;
 set local role authenticated;
 select pg_temp.as_user('44444444-4444-4444-8444-444444444444');
 
@@ -121,8 +128,10 @@ select is((select count(*)::int from public.staff_booking_history(pg_temp.id('b1
   'other staff see the booking history without payment entries');
 select throws_ok($$ select * from public.staff_money_summary() $$, '42501', null, 'only payment staff see money totals');
 
-select pg_temp.as_user('11111111-1111-4111-8111-111111111111');
-select throws_ok($$ select * from public.staff_booking_history(pg_temp.id('b1')) $$, '42501', null, 'players cannot read booking history');
+reset role;
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select throws_ok($$ select * from public.staff_booking_history(pg_temp.id('b1')) $$, '42501', null, 'visitors cannot read booking history');
 
 select * from finish();
 rollback;

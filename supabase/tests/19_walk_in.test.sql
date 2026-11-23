@@ -3,6 +3,7 @@
 -- in the money totals. Events and amounts are TEST FIXTURES (rolled back).
 begin;
 select plan(14);
+\ir _fixtures.sql
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('a1000000-0000-4000-8000-000000000001', 'walkadmin@test.local', '{"full_name":"Wes Admin"}'),
@@ -51,14 +52,15 @@ select throws_ok($$ select public.admin_add_walk_in('a3000000-0000-4000-8000-000
 select is((select string_agg(player_name || coalesce(' / ' || partner_name, '') || ':' || is_walk_in::text || ':' || coalesce(player_phone, '-'),
                              ', ' order by division_name)
            from public.staff_list_registrations('a3000000-0000-4000-8000-000000000001')),
-  'Juan Walk:true:09171234567, Ana Walk / Ben Walk:true:-', 'the registrations list shows walk-ins by name');
+  'Ana Walk / Ben Walk:true:-, Juan Walk:true:09171234567', 'the registrations list shows walk-ins by name (by division: Doubles, Singles)');
 select is((select string_agg(method::text || '=' || centavos, ',' order by method::text) from public.staff_money_summary() where kind = 'walk_in_fee'),
   'cash=40000,gcash=80000', 'walk-in fees count in Today''s money by method');
 select is((select event_fee_centavos from public.report_revenue_daily(private.operating_date_of(now()), private.operating_date_of(now()))),
   120000::bigint, 'and in the revenue report as event fees');
 select lives_ok($$ select public.staff_cancel_registration(
-  (select id from public.event_registrations where guest_name = 'Juan Walk'), 'Left early') $$,
+  (select id from public.event_registrations where guest_name = 'Juan Walk' and event_id = 'a3000000-0000-4000-8000-000000000001'), 'Left early') $$,
   'a walk-in can be cancelled (no account to notify)');
+reset role;  -- private helpers are not callable by API roles
 select is((select private.entry_label(id) from public.event_registrations where guest_name = 'Ana Walk'), 'Ana Walk / Ben Walk',
   'brackets and standings name walk-ins');
 

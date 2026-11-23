@@ -4,6 +4,7 @@
 -- inside this rolled-back transaction.
 begin;
 select plan(5);
+\ir _fixtures.sql
 
 create function pg_temp.court(_n int) returns uuid language sql stable security definer as
   $$ select id from public.courts where number = _n $$;

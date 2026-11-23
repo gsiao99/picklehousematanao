@@ -33,8 +33,8 @@ select throws_ok($$ select private.bootstrap_first_admin('ana.reyes@test.local')
 select throws_ok($$ select public.staff_set_player_level('11111111-1111-4111-8111-111111111111', 'advanced', 'self promote') $$,
   '42501', null, 'a player cannot set their own level');
 select is((select roles::text || permissions::text from public.get_my_access()),
-  '{player}{}', 'a player''s access is the player role with no permissions');
-select is((select count(*)::int from public.user_roles), 1, 'a player sees only their own role row');
+  '{}{}', 'an account with no role granted has no roles and no permissions');
+select is((select count(*)::int from public.user_roles), 0, 'an account with no role sees no role rows');
 select is_empty('select * from public.audit_log', 'a player cannot read the audit log');
 select is((select count(*)::int from public.user_roles where role = 'admin'), 0,
   'after all attempts the player still has no admin role visible');

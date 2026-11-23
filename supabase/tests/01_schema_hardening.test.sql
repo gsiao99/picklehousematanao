@@ -1,6 +1,6 @@
 -- Schema-level guarantees: RLS everywhere, least-privilege grants, seeds.
 begin;
-select plan(13);
+select plan(14);
 
 select ok(
   not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
@@ -56,11 +56,17 @@ select is(
   'booking_slots has the no-overlap exclusion constraint'
 );
 
-select is((select count(*)::int from public.courts where environment = 'indoor'), 3, 'three indoor courts are seeded');
-select is((select count(*)::int from public.rate_rules), 0, 'no rates are invented');
-select is((select count(*)::int from public.operating_hours), 0, 'no opening hours are invented');
-select is((select count(*)::int from public.payment_methods), 0, 'no payment accounts are invented');
-
+-- Seed data holds only facts confirmed by the owner (23 Nov 2026).
+select is((select count(*)::int from public.courts), 0, 'no courts are seeded (count not confirmed)');
+select is((select string_agg(format('%s %s-%s %s', label, starts_at, ends_at, price_centavos), '; ' order by starts_at)
+           from public.rate_rules where unit is null and is_active),
+  'Daytime 08:00:00-17:00:00 10000; Evening 17:00:00-22:00:00 20000',
+  'only the confirmed rates are seeded, with no basis');
+select is((select count(*)::int from public.rate_rules), 2, 'no other rates are invented (10–11 PM not confirmed)');
+select is((select count(*)::int from public.operating_hours where not is_closed and opens_at = '08:00' and closes_at = '23:00'), 7,
+  'open Monday to Sunday, 8:00 AM – 11:00 PM');
+select is((select count(*)::int from public.payment_methods where account_name is not null or account_number is not null), 0,
+  'no payment accounts are invented');
 select is(
   (select public from storage.buckets where id = 'payment-proofs'),
   false,

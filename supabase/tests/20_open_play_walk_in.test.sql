@@ -3,6 +3,7 @@
 -- counted per walk-in. Sessions and fees are TEST FIXTURES (rolled back).
 begin;
 select plan(11);
+\ir _fixtures.sql
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('b1000000-0000-4000-8000-000000000001', 'opstaff@test.local', '{"full_name":"Ola Staff"}'),

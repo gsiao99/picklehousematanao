@@ -3,6 +3,7 @@
 -- are TEST FIXTURES inside this rolled-back transaction.
 begin;
 select plan(10);
+\ir _fixtures.sql
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('c1000000-0000-4000-8000-000000000001', 'setupstaff@test.local', '{"full_name":"Sam Setup"}'),
@@ -10,7 +11,9 @@ insert into auth.users (id, email, raw_user_meta_data) values
 insert into public.user_roles (user_id, role) values
   ('c1000000-0000-4000-8000-000000000001', 'staff'),
   ('c1000000-0000-4000-8000-000000000002', 'admin');
-insert into public.staff_permissions (user_id, permission) values ('c1000000-0000-4000-8000-000000000001', 'openplay.manage');
+insert into public.staff_permissions (user_id, permission) values
+  ('c1000000-0000-4000-8000-000000000001', 'openplay.manage'),
+  ('c1000000-0000-4000-8000-000000000001', 'payments.verify');  -- today's money needs payments.verify
 
 select set_config('app.audit_reason', 'Test fixtures', true);
 insert into public.events (id, slug, title, event_type, starts_at, ends_at, status, fee_centavos, fee_unit) values

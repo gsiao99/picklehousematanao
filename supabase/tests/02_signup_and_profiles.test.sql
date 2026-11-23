@@ -1,4 +1,5 @@
--- Registration trigger and profile access restrictions.
+-- New sign-ins (staff accounts, created by an admin) and profile access.
+-- There are no player accounts: guests book without signing in.
 begin;
 select plan(19);
 
@@ -14,11 +15,11 @@ insert into auth.users (id, email, raw_user_meta_data) values
 select is((select full_name from public.profiles where id = '11111111-1111-4111-8111-111111111111'),
   'Ana Reyes', 'sign-up creates a profile with the submitted name');
 select is((select phone from public.profiles where id = '11111111-1111-4111-8111-111111111111'),
-  '09171234567', 'phone is normalised to 09XXXXXXXXX');
-select ok((select privacy_consent_at is not null from public.profiles where id = '11111111-1111-4111-8111-111111111111'),
-  'privacy consent time is recorded');
-select is((select array_agg(role)::text from public.user_roles where user_id = '11111111-1111-4111-8111-111111111111'),
-  '{player}', 'a role in sign-up metadata is ignored: new accounts are players only');
+  null, 'sign-up metadata does not set the phone (staff set it on their profile)');
+select ok((select self_rated_level is null and level is null from public.profiles where id = '11111111-1111-4111-8111-111111111111'),
+  'sign-up metadata does not set a player level');
+select is((select count(*)::int from public.user_roles where user_id = '11111111-1111-4111-8111-111111111111'),
+  0, 'a role in sign-up metadata is ignored: new accounts get no role until an admin grants one');
 select is((select count(*)::int from public.staff_permissions where user_id = '11111111-1111-4111-8111-111111111111'),
   0, 'permissions in sign-up metadata are ignored');
 select is((select full_name from public.profiles where id = '22222222-2222-4222-8222-222222222222'),
