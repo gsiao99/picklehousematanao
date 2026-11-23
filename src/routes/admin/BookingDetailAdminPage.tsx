@@ -8,13 +8,14 @@ import { Alert } from '@/components/ui/form'
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/states'
 import { routes } from '@/config/navigation'
 import { BookingStatusControl } from '@/features/admin/BookingStatusControl'
+import { GuestCard } from '@/features/admin/GuestCard'
 import { loadStaffBookingDetail, type StaffBookingDetail, type StaffPayment } from '@/features/admin/bookingDetailApi'
 import { useAuth } from '@/features/auth/context'
 import { BookingStatusBadges } from '@/features/booking/StatusBadges'
 import { useLiveQuery } from '@/features/booking/useLiveQuery'
 import { staffCheckInBooking } from '@/features/events/api'
 import { PrivateImage } from '@/features/payments/PrivateImage'
-import { PlayerAvatar } from '@/features/player/PlayerAvatar'
+import { Initials } from '@/components/ui/Initials'
 import { cn } from '@/lib/cn'
 import { toAppError } from '@/lib/errors'
 import { formatPeso } from '@/lib/money'
@@ -211,12 +212,14 @@ function Detail({
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Player */}
-        <Card id="detail-player" title="Player">
-          {player ? (
+        {/* Guest (or, for older bookings, the player account) */}
+        <Card id="detail-player" title={player ? 'Player' : 'Guest'}>
+          {!player ? (
+            <GuestCard booking={b} canManage={canCheckIn} onChanged={onChanged} />
+          ) : player ? (
             <>
               <div className="mb-4 flex items-center gap-3">
-                <PlayerAvatar profile={player} size="md" />
+                <Initials name={player.display_name || player.full_name} size="md" />
                 <p className="font-semibold">{player.display_name || player.full_name}</p>
               </div>
               <dl className="grid grid-cols-2 gap-4">
@@ -262,7 +265,7 @@ function Detail({
             <Field label="Confirmed">{b.confirmedAt ? formatDateTime(b.confirmedAt) : '—'}</Field>
             {b.cancelledAt ? <Field label="Cancelled">{formatDateTime(b.cancelledAt)}</Field> : null}
             {b.cancelReason ? <Field label="Cancel reason">{b.cancelReason}</Field> : null}
-            <Field label="Court board name">{b.displayName ?? 'None (shows “Booked”)'}</Field>
+            <Field label="Court board name">{b.displayNameHidden ? 'Hidden' : (b.displayName ?? 'None (shows “Booked”)')}</Field>
             <Field label="Days">{days.map(formatOperatingDate).join(', ') || '—'}</Field>
           </dl>
         </Card>

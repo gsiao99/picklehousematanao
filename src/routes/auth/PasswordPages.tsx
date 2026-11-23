@@ -115,7 +115,7 @@ export function ResetPasswordPage() {
     setBusy(true)
     try {
       await updatePassword(parsed.data.password)
-      navigate(`${routes.account}?updated=password`, { replace: true })
+      navigate(routes.admin, { replace: true })
     } catch (e) {
       setFormError(toAppError(e).message)
     } finally {

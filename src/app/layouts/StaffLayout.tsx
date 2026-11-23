@@ -1,17 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
-  ArrowLeft,
   BarChart3,
   CalendarDays,
   IdCard,
-  Images,
   LayoutDashboard,
   Menu,
-  Package,
   Receipt,
   Settings,
-  ShoppingBag,
   Ticket,
   Trophy,
   Users,
@@ -19,7 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { LogoMark } from '@/components/brand/Logo'
-import { playerRoutes, routes } from '@/config/navigation'
+import { routes } from '@/config/navigation'
 import { DemoBanner } from '@/demo/DemoBanner'
 import { useAuth } from '@/features/auth/context'
 import { RequireAccess } from '@/features/auth/guards'
@@ -75,13 +71,6 @@ function useStaffMenu() {
       ],
     },
     {
-      label: 'Shop',
-      items: [
-        { to: routes.adminSales, label: 'Sales', icon: ShoppingBag },
-        { to: routes.adminInventory, label: 'Inventory', icon: Package },
-      ],
-    },
-    {
       label: 'People',
       items: [
         { to: routes.adminPlayers, label: 'Players', icon: Users },
@@ -92,7 +81,6 @@ function useStaffMenu() {
       label: 'Club',
       items: [
         ...(auth.can('events.manage') || auth.can('openplay.manage') ? [{ to: routes.adminEvents, label: 'Events', icon: Trophy }] : []),
-        ...(auth.can('content.manage') ? [{ to: routes.adminPhotos, label: 'Photos', icon: Images }] : []),
         ...(isAdmin ? [{ to: routes.adminSettings, label: 'Settings', icon: Settings }] : []),
       ],
     },
@@ -154,21 +142,6 @@ function StaffNavList({ groups, onNavigate }: { groups: Group[]; onNavigate?: ()
   )
 }
 
-function PlayerAreaLink({ onNavigate }: { onNavigate?: () => void }) {
-  const auth = useAuth()
-  if (!auth.hasRole('player')) return null
-  return (
-    <Link
-      to={playerRoutes.dashboard}
-      onClick={onNavigate}
-      className="flex h-11 items-center gap-3 rounded-xl px-3 font-medium text-white/85 hover:bg-white/10 hover:text-white"
-    >
-      <ArrowLeft className="size-5" aria-hidden="true" />
-      Player area
-    </Link>
-  )
-}
-
 function StaffShell() {
   const auth = useAuth()
   const location = useLocation()
@@ -204,7 +177,6 @@ function StaffShell() {
             <StaffNavList groups={groups} />
           </nav>
           <div className="border-t border-white/10 px-4 pt-3">
-            <PlayerAreaLink />
           </div>
           <SignOutButton className="px-4 pb-4" />
         </aside>
@@ -301,7 +273,6 @@ function StaffShell() {
             <StaffNavList groups={groups} onNavigate={() => setDrawerOn(null)} />
           </nav>
           <div className="border-t border-white/10 px-4 pt-3">
-            <PlayerAreaLink onNavigate={() => setDrawerOn(null)} />
           </div>
           <SignOutButton className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))]" />
         </div>

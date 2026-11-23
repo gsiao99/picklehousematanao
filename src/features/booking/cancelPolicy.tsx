@@ -1,8 +1,8 @@
 import { venue } from '@/config/venue'
 import { cn } from '@/lib/cn'
-import { deadlineText, useCancelRule } from './cancelRule'
+import { cutoffText, deadlineText, useCancelRule } from './cancelRule'
 
-/** "call the club at 0909 280 0571", or "contact the club" when no phone is set. */
+/** "call the club at 0917 …", or "contact the club" when no phone is set yet. */
 export function ContactClub() {
   const phone = venue.contact.phone
   return phone ? (
@@ -17,7 +17,7 @@ export function ContactClub() {
   )
 }
 
-/** The rule in one line, shown in the cart before the player reserves. */
+/** The rule in one line, shown before booking and on the manage link. Refunds are handled by staff. */
 export function CancelPolicyNote({ firstStartsAt, className }: { firstStartsAt: string | null; className?: string }) {
   const rule = useCancelRule(firstStartsAt)
   if (rule.kind === 'loading' || rule.kind === 'unknown') return null
@@ -25,15 +25,13 @@ export function CancelPolicyNote({ firstStartsAt, className }: { firstStartsAt: 
     <p className={cn('text-sm', className)}>
       {rule.kind === 'until' ? (
         <>
-          You can cancel up to {rule.hours} hours before your first time (until {deadlineText(rule.deadline)}). After that, <ContactClub />.
-        </>
-      ) : rule.kind === 'too_late' ? (
-        <>
-          Your first time starts in less than {rule.hours} hours, so this booking cannot be cancelled online. If your plans change, <ContactClub />.
+          You can cancel online up to {cutoffText(rule.minutes)} before your first time (until {deadlineText(rule.deadline)}). If you
+          already paid, the club arranges your refund. After that, <ContactClub />.
         </>
       ) : (
         <>
-          Once reserved, only the club can cancel this booking. If your plans change, <ContactClub />.
+          Your first time starts in less than {cutoffText(rule.minutes)}, so this booking cannot be cancelled online. If your plans
+          change, <ContactClub />.
         </>
       )}
     </p>

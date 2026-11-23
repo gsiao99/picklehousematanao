@@ -5,11 +5,10 @@ import { routes } from '@/config/navigation'
 import { listUpcomingTournaments } from '@/features/tournaments/api'
 import { TournamentRows } from '@/features/tournaments/TournamentList'
 import { useAsync } from '@/lib/useAsync'
-import { TournamentPhotos } from '@/features/gallery/PhotoStrip'
 import { FollowInstagram } from './FollowInstagram'
 import { RevealWords } from '@/components/ui/Reveal'
 
-/** Tournaments on the homepage: the full list when one is announced, a short note when none are; tournament photos below either. */
+/** Tournaments on the homepage: the full list when one is announced, a short note when none are. */
 export function TournamentsSection() {
   const tournaments = useAsync(listUpcomingTournaments)
 
@@ -19,10 +18,9 @@ export function TournamentsSection() {
         <SectionHeading
           id="tournaments-title"
           title="Tournaments"
-          intro="Singles, doubles and mixed doubles divisions, grouped by level. Register with your partner, pay the entry fee online, and follow the brackets live."
+          intro="Divisions grouped by level, with brackets you can follow live. Registration details are on each event."
         />
         <TournamentRows state={tournaments} />
-        <TournamentPhotos className="mt-12 sm:mt-16" />
       </Section>
     )
   }
@@ -54,7 +52,6 @@ export function TournamentsSection() {
           </Link>
         </div>
       </div>
-      <TournamentPhotos className="mt-10 sm:mt-12" />
     </Section>
   )
 }

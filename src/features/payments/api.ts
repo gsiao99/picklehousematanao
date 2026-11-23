@@ -26,84 +26,10 @@ function db(): DbClient {
 }
 
 // ---------------------------------------------------------------------------
-// Player
+// Receipt files (guests upload through features/guest/api.ts)
 // ---------------------------------------------------------------------------
-export interface PaymentMethodOption {
-  id: string
-  kind: MethodKind
-  label: string
-  accountName: string | null
-  accountNumber: string | null
-  bankName: string | null
-  qrPath: string | null
-  instructions: string | null
-}
-
-export interface PaymentInstructions {
-  amountDueCentavos: number | null
-  bookingReference: string | null
-  dueAt: string | null
-  methods: PaymentMethodOption[]
-}
-
-export async function getPaymentInstructions(bookingId: string): Promise<PaymentInstructions> {
-  const { data, error } = await db().rpc('get_payment_instructions', { _booking_id: bookingId })
-  if (error) throw toAppError(error)
-  const rows = data ?? []
-  return {
-    amountDueCentavos: rows[0]?.amount_due_centavos ?? null,
-    bookingReference: rows[0]?.booking_reference ?? null,
-    dueAt: rows[0]?.payment_due_at ?? null,
-    methods: rows.map((r) => ({
-      id: r.payment_method_id,
-      kind: r.kind,
-      label: r.label,
-      accountName: r.account_name ?? null,
-      accountNumber: r.account_number ?? null,
-      bankName: r.bank_name ?? null,
-      qrPath: r.qr_image_path ?? null,
-      instructions: r.instructions ?? null,
-    })),
-  }
-}
-
-export interface PaymentRecord {
-  id: string
-  status: SubmissionStatus
-  methodKind: MethodKind
-  amountCentavos: number
-  /** What the player said they sent (null on receipts sent before this was asked). */
-  declaredCentavos: number | null
-  referenceNo: string | null
-  submittedAt: string
-  reviewedAt: string | null
-  reviewNote: string | null
-}
-
-/** The player's own submissions for a booking (Row Level Security limits this to their bookings). */
-export async function listBookingPayments(bookingId: string): Promise<PaymentRecord[]> {
-  const { data, error } = await db()
-    .from('payments')
-    .select('id, status, method_kind, amount_centavos, declared_centavos, reference_no, created_at, reviewed_at, review_note')
-    .eq('booking_id', bookingId)
-    .order('created_at', { ascending: false })
-  if (error) throw toAppError(error)
-  return (data ?? []).map((p) => ({
-    id: p.id,
-    status: p.status,
-    methodKind: p.method_kind,
-    amountCentavos: p.amount_centavos,
-    declaredCentavos: p.declared_centavos,
-    referenceNo: p.reference_no,
-    submittedAt: p.created_at,
-    reviewedAt: p.reviewed_at,
-    reviewNote: p.review_note,
-  }))
-}
-
 export const PROOF_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 export const PROOF_MAX_BYTES = 5 * 1024 * 1024
-const extensionFor: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
 
 /** Checks the browser can do before upload. Storage and the database check again. */
 export function checkProofFile(file: File): string | null {
@@ -111,55 +37,6 @@ export function checkProofFile(file: File): string | null {
   if (file.size > PROOF_MAX_BYTES) return 'That file is larger than 5 MB. Upload a smaller screenshot.'
   if (file.size === 0) return 'That file is empty.'
   return null
-}
-
-async function sha256Hex(file: File): Promise<string | null> {
-  if (!globalThis.crypto?.subtle) return null
-  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-function randomName(): string {
-  const bytes = new Uint8Array(6)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-/**
- * Upload a receipt to the private payment-proofs bucket, then record the
- * submission. The file lands in {userId}/{bookingId}/, the only folder the
- * storage policies let this player write to.
- */
-export async function submitPayment(input: {
-  userId: string
-  bookingId: string
-  methodId: string
-  file: File
-  referenceNo: string
-  /** What the player says they sent; the database refuses less than the amount due. */
-  amountCentavos: number
-}): Promise<void> {
-  const problem = checkProofFile(input.file)
-  if (problem) throw new AppError('validation', problem)
-  const hash = await sha256Hex(input.file)
-  const path = `${input.userId}/${input.bookingId}/${Date.now()}-${randomName()}.${extensionFor[input.file.type]}`
-
-  const upload = await db().storage.from('payment-proofs').upload(path, input.file, {
-    contentType: input.file.type,
-    upsert: false,
-    cacheControl: '0',
-  })
-  if (upload.error) throw toAppError(upload.error)
-
-  const { error } = await db().rpc('submit_payment', {
-    _booking_id: input.bookingId,
-    _payment_method_id: input.methodId,
-    _proof_path: path,
-    _reference_no: input.referenceNo.trim() || undefined,
-    _proof_sha256: hash ?? undefined,
-    _amount_centavos: input.amountCentavos,
-  })
-  if (error) throw toAppError(error)
 }
 
 /** Short-lived link to a private file; Storage checks the viewer may read it. */
@@ -321,6 +198,14 @@ export async function savePaymentMethod(row: TablesInsert<'payment_methods'>): P
 export async function deletePaymentMethod(id: string): Promise<void> {
   const { error } = await db().from('payment_methods').delete().eq('id', id)
   if (error) throw toAppError(error)
+}
+
+const extensionFor: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+
+function randomName(): string {
+  const bytes = new Uint8Array(6)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 /** Upload a QR code image to the private payment-qr bucket; returns its path. */

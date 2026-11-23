@@ -1,7 +1,7 @@
 /**
  * DEMO ONLY — payments, notifications, staff operations and file storage for
  * the single-file preview, mirroring the SQL functions in
- * supabase/migrations/20261011001100_payments.sql. Account details, receipts and
+ * supabase/migrations (baseline and guest bookings). Account details, receipts and
  * QR images here are SAMPLES; no money moves and nothing is saved.
  */
 import {
@@ -14,12 +14,11 @@ import {
   isStaff,
   nowIso,
   opDateOf,
-  requirePlayer,
   requireReason,
   rpc,
   signal,
   uid,
-  type Row, isAdmin } from './engine'
+  type Row, isAdmin, guestBooking, guestView } from './engine'
 
 const CONFIG_SIGNAL = '2000-01-01'
 
@@ -67,15 +66,14 @@ const key = (bucket: string, path: string) => `${bucket}/${path}`
 const bucketRules: Record<string, { maxBytes: number; types: string[] }> = {
   'payment-proofs': { maxBytes: 5 * 1024 * 1024, types: ['image/jpeg', 'image/png', 'image/webp'] },
   'payment-qr': { maxBytes: 2 * 1024 * 1024, types: ['image/jpeg', 'image/png', 'image/webp'] },
-  avatars: { maxBytes: 2 * 1024 * 1024, types: ['image/jpeg', 'image/png', 'image/webp'] },
   'venue-assets': { maxBytes: 5 * 1024 * 1024, types: ['image/jpeg', 'image/png', 'image/webp'] },
 }
 
-function canReadFile(bucket: string, f: StoredFile) {
-  if (!currentUserId) return false
+function canReadFile(bucket: string, _file: StoredFile) {
+  // QR codes of payment methods open for guests at checkout (signed links).
   if (bucket === 'payment-qr') return true
-  if (bucket === 'payment-proofs') return f.owner === currentUserId || can('payments.verify')
-  if (bucket === 'avatars') return f.owner === currentUserId || isStaff()
+  if (!currentUserId) return false
+  if (bucket === 'payment-proofs') return can('payments.verify')
   if (bucket === 'venue-assets') return true
   return false
 }
@@ -94,15 +92,12 @@ export function storageBucket(bucket: string) {
       const type = opts?.contentType ?? file.type
       if (!rules.types.includes(type)) return storageError(415, `mime type ${type} is not supported`)
       if (file.size > rules.maxBytes) return storageError(413, 'The object exceeded the maximum allowed size')
-      if (!currentUserId) return storageError(403, 'new row violates row-level security policy')
       if (bucket === 'payment-proofs') {
-        const [owner, bookingId] = path.split('/')
-        const booking = db.bookings.find((b) => b.id === bookingId)
-        if (owner !== currentUserId || !booking || booking.player_id !== currentUserId)
-          return storageError(403, 'new row violates row-level security policy')
-      }
+        // Guests upload only to the exact path of an open upload grant.
+        const grant = uploadGrants.get(path)
+        if (!grant || grant.used || grant.expiresAt < Date.now()) return storageError(403, 'new row violates row-level security policy')
+      } else if (!currentUserId) return storageError(403, 'new row violates row-level security policy')
       if (bucket === 'payment-qr' && !can('content.manage')) return storageError(403, 'new row violates row-level security policy')
-      if (bucket === 'avatars' && path.split('/')[0] !== currentUserId) return storageError(403, 'new row violates row-level security policy')
       if (bucket === 'venue-assets' && !can('content.manage')) return storageError(403, 'new row violates row-level security policy')
       if (files.has(key(bucket, path)) && !opts?.upsert) return storageError(409, 'The resource already exists')
       files.set(key(bucket, path), { url: URL.createObjectURL(file), owner: currentUserId, bucket })
@@ -133,6 +128,11 @@ export function storageBucket(bucket: string) {
 // Helpers mirroring the SQL
 // ---------------------------------------------------------------------------
 const profile = (id: string) => db.profiles.find((p) => p.id === id)
+/** Mirrors private.booked_by: an account booking of mine, or a guest booking under my staff phone. */
+const bookedByMe = (b: Row) =>
+  Boolean(currentUserId) && (b.player_id === currentUserId || (b.guest_phone && b.guest_phone === profile(currentUserId!)?.phone))
+/** Receipt upload grants issued by guest_begin_receipt_upload (path → booking). */
+const uploadGrants = new Map<string, { bookingId: string; expiresAt: number; used: boolean }>()
 const bookingOf = (id: string) => db.bookings.find((b) => b.id === id)
 const liveSlots = (bookingId: string) =>
   db.booking_slots.filter((s) => s.booking_id === bookingId && s.status !== 'released' && s.status !== 'cancelled')
@@ -199,32 +199,29 @@ function recordDeskCash(b: Row, received: unknown, note: unknown) {
 // RPCs
 // ---------------------------------------------------------------------------
 Object.assign(rpc, {
-  get_payment_instructions({ _booking_id }: Row) {
-    const b = bookingOf(_booking_id)
-    if (!b || (b.player_id !== currentUserId && !can('payments.verify'))) throw new DemoError('P0002', 'That booking was not found.')
-    if (b.status !== 'confirmed') throw new DemoError('22023', 'Only confirmed bookings can be paid.')
-    return db.payment_methods
-      .filter((m) => m.is_active && m.kind !== 'cash')
-      .sort((a, c) => a.sort_order - c.sort_order || String(a.label).localeCompare(String(c.label)))
-      .map((m) => ({
-        payment_method_id: m.id, kind: m.kind, label: m.label, account_name: m.account_name, account_number: m.account_number,
-        bank_name: m.bank_name, qr_image_path: m.qr_image_path, instructions: m.instructions,
-        amount_due_centavos: amountDue(b.id), booking_reference: b.reference, payment_due_at: b.payment_due_at ?? null,
-      }))
+  guest_begin_receipt_upload({ _reference, _token, _extension }: Row) {
+    const b = guestBooking(_reference, _token)
+    if (!b) return { error: 'not_found' }
+    if (b.status !== 'confirmed' || b.payment_status !== 'unpaid' || amountDue(b.id) <= 0)
+      throw new DemoError('22023', 'This booking does not need a payment.')
+    const ext = String(_extension ?? '').toLowerCase()
+    if (!['jpg', 'jpeg', 'png', 'webp'].includes(ext)) throw new DemoError('22023', 'Upload a JPG, PNG or WebP image of your receipt.')
+    const path = `${b.id}/${uid()}/receipt.${ext}`
+    uploadGrants.set(path, { bookingId: b.id, expiresAt: Date.now() + 15 * 60_000, used: false })
+    return { bucket: 'payment-proofs', path }
   },
 
-  submit_payment({ _booking_id, _payment_method_id, _proof_path, _reference_no, _proof_sha256, _amount_centavos }: Row) {
-    const me = requirePlayer()
-    const b = bookingOf(_booking_id)
-    if (!b || b.player_id !== me) throw new DemoError('P0002', 'That booking was not found.')
+  guest_submit_payment({ _reference, _token, _payment_method_id, _proof_path, _reference_no, _proof_sha256, _amount_centavos }: Row) {
+    const b = guestBooking(_reference, _token)
+    if (!b) return { error: 'not_found' }
     if (b.status !== 'confirmed') throw new DemoError('22023', 'Only confirmed bookings can be paid.')
     if (b.payment_status === 'pending_verification') throw new DemoError('22023', 'A payment for this booking is already being checked.')
     if (b.payment_status !== 'unpaid') throw new DemoError('22023', 'This booking does not need a payment.')
     const m = db.payment_methods.find((x) => x.id === _payment_method_id && x.is_active && x.kind !== 'cash')
     if (!m) throw new DemoError('22023', 'Choose one of the club’s payment methods.')
-    const f = files.get(key('payment-proofs', String(_proof_path ?? '')))
-    if (!f || f.owner !== me || !String(_proof_path).startsWith(`${me}/${b.id}/`))
-      throw new DemoError('22023', 'Your proof of payment was not found. Upload it again.')
+    const grant = uploadGrants.get(String(_proof_path ?? ''))
+    if (!grant || grant.used || grant.bookingId !== b.id || !files.get(key('payment-proofs', String(_proof_path))))
+      throw new DemoError('22023', 'Upload your receipt first.')
     const due = amountDue(b.id)
     if (due <= 0) throw new DemoError('22023', 'This booking does not need a payment.')
     if (_amount_centavos != null && Number(_amount_centavos) < due)
@@ -234,16 +231,16 @@ Object.assign(rpc, {
     if ((ref && live.some((p) => p.method_kind === m.kind && p.reference_no?.toLowerCase() === ref.toLowerCase())) ||
         (_proof_sha256 && live.some((p) => p.proof_sha256 === _proof_sha256)))
       throw new DemoError('23505', 'That reference number or receipt was already used for another payment.')
-    const id = uid()
     db.payments.push({
-      id, booking_id: b.id, payment_method_id: m.id, method_kind: m.kind, amount_centavos: due,
+      id: uid(), booking_id: b.id, payment_method_id: m.id, method_kind: m.kind, amount_centavos: due,
       declared_centavos: _amount_centavos == null ? null : Number(_amount_centavos), reference_no: ref,
-      proof_path: _proof_path, proof_sha256: _proof_sha256 ?? null, status: 'submitted', submitted_by: me,
+      proof_path: _proof_path, proof_sha256: _proof_sha256 ?? null, status: 'submitted', submitted_by: null,
       reviewed_by: null, reviewed_at: null, review_note: null, created_at: nowIso(), updated_at: nowIso(),
     })
+    grant.used = true
     b.payment_status = 'pending_verification'
-    notifyVerifiers(`Payment to check: ${b.reference}`, `${m.label} · ${peso(_amount_centavos == null ? due : Number(_amount_centavos))}`, '/admin/payments')
-    return id
+    notifyVerifiers(`Payment to check: ${b.reference}`, `${b.display_name} · ${m.label} · ${peso(_amount_centavos == null ? due : Number(_amount_centavos))}`, '/admin/payments')
+    return guestView(b)
   },
 
   mark_notifications_read({ _ids }: Row) {
@@ -268,8 +265,8 @@ Object.assign(rpc, {
           amount_centavos: p.amount_centavos, reference_no: p.reference_no, proof_path: p.proof_path, submitted_at: p.created_at,
           reviewed_at: p.reviewed_at, reviewer_name: p.reviewed_by ? profile(p.reviewed_by)?.full_name ?? null : null,
           review_note: p.review_note, booking_id: b.id, booking_reference: b.reference, booking_status: b.status,
-          booking_total_centavos: b.total_centavos, first_slot_at: firstSlotAt(b.id), player_name: pl?.full_name ?? null,
-          player_phone: pl?.phone ?? null, is_own: b.player_id === currentUserId || p.submitted_by === currentUserId,
+          booking_total_centavos: b.total_centavos, first_slot_at: firstSlotAt(b.id), player_name: pl?.full_name ?? b.display_name ?? null,
+          player_phone: pl?.phone ?? b.guest_phone ?? null, is_own: bookedByMe(b) || p.submitted_by === currentUserId,
         }
       })
   },
@@ -279,7 +276,7 @@ Object.assign(rpc, {
     const p = db.payments.find((x) => x.id === _payment_id)
     if (!p) throw new DemoError('P0002', 'That payment was not found.')
     const b = bookingOf(p.booking_id)!
-    if (b.player_id === currentUserId || p.submitted_by === currentUserId)
+    if (bookedByMe(b) || p.submitted_by === currentUserId)
       throw new DemoError('42501', 'You cannot review a payment for your own booking. Ask another staff member.')
     if (p.status !== 'submitted') throw new DemoError('22023', `This payment was already ${p.status}.`)
     const reason = typeof _reason === 'string' ? _reason.trim() : ''
@@ -313,7 +310,7 @@ Object.assign(rpc, {
     requireVerifier('You do not have permission to record payments.')
     const b = bookingOf(_booking_id)
     if (!b) throw new DemoError('P0002', 'That booking was not found.')
-    if (b.player_id === currentUserId) throw new DemoError('42501', 'You cannot record a payment for your own booking.')
+    if (bookedByMe(b)) throw new DemoError('42501', 'You cannot record a payment for your own booking.')
     if (receiptWaiting(b.id)) throw new DemoError('22023', RECEIPT_WAITING)
     if (b.status !== 'confirmed' || b.payment_status !== 'unpaid') throw new DemoError('22023', 'This booking does not need a payment.')
     return recordDeskCash(b, _received_centavos, _note)
@@ -323,7 +320,7 @@ Object.assign(rpc, {
     requireVerifier('You do not have permission to confirm payments.')
     const b = bookingOf(_booking_id)
     if (!b) throw new DemoError('P0002', 'That booking was not found.')
-    if (b.player_id === currentUserId) throw new DemoError('42501', 'You cannot confirm payment for your own booking. Ask another staff member.')
+    if (bookedByMe(b)) throw new DemoError('42501', 'You cannot confirm payment for your own booking. Ask another staff member.')
     if (b.status !== 'confirmed') throw new DemoError('22023', `Only an active booking can be marked paid (this one is ${b.status}).`)
     if (b.payment_status === 'paid' || b.payment_status === 'waived') return null
     if (b.payment_status === 'pending_verification' || receiptWaiting(b.id)) throw new DemoError('22023', RECEIPT_WAITING)
@@ -336,7 +333,7 @@ Object.assign(rpc, {
     const why = requireReason(_reason)
     const b = bookingOf(_booking_id)
     if (!b) throw new DemoError('P0002', 'That booking was not found.')
-    if (b.player_id === currentUserId) throw new DemoError('42501', 'You cannot change payment for your own booking. Ask another staff member.')
+    if (bookedByMe(b)) throw new DemoError('42501', 'You cannot change payment for your own booking. Ask another staff member.')
     if (b.status !== 'confirmed') throw new DemoError('22023', `Only an active booking can be changed (this one is ${b.status}).`)
     if (b.payment_status !== 'paid') return null
     for (const p of db.payments.filter((x) => x.booking_id === b.id && x.status === 'approved')) {
@@ -358,16 +355,6 @@ Object.assign(rpc, {
     if (b.player_id !== currentUserId && b.status === 'confirmed')
       notify(b.player_id, 'booking_cancelled', 'Booking removed', `Your booking ${b.reference} was removed by the club. Reason: ${why}`, '/player/bookings')
     return null
-  },
-
-  set_booking_display_name({ _booking_id, _name }: Row) {
-    const b = bookingOf(_booking_id)
-    if (!b || (b.player_id !== currentUserId && !can('bookings.manage'))) throw new DemoError('P0002', 'That booking was not found.')
-    if (b.status !== 'held' && b.status !== 'confirmed') throw new DemoError('22023', 'This booking can no longer be changed.')
-    const clean = String(_name ?? '').replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim() || null
-    if (clean && clean.length > 30) throw new DemoError('22023', 'Keep the court board name to 30 characters or fewer.')
-    b.display_name = clean
-    return clean
   },
 
   staff_record_refund({ _booking_id, _reason }: Row) {
@@ -421,7 +408,7 @@ Object.assign(rpc, {
         const pl = profile(b.player_id)
         return {
           booking_id: b.id, reference: b.reference, status: b.status, payment_status: b.payment_status, total_centavos: b.total_centavos,
-          player_id: b.player_id, player_name: pl?.full_name ?? '', player_phone: pl?.phone ?? null,
+          player_id: b.player_id, player_name: pl?.full_name ?? b.display_name ?? '', player_phone: pl?.phone ?? b.guest_phone ?? null,
           first_slot_at: slots.map((s) => s._start).sort()[0] ?? null, operating_date: slots.map((s) => s.operating_date).sort()[0] ?? null,
           slot_count: slots.length,
           courts: [...new Set(slots.map((s) => db.courts.find((c) => c.id === s.court_id)?.name))].sort().join(', ') || null,
@@ -464,8 +451,8 @@ Object.assign(rpc, {
           reviewer_name: p.reviewed_by ? profile(p.reviewed_by)?.full_name ?? null : null, review_note: p.review_note,
           booking_id: b.id, booking_reference: b.reference, booking_status: b.status, booking_payment_status: b.payment_status,
           booking_total_centavos: b.total_centavos, booking_due_centavos: amountDue(b.id), first_slot_at: firstSlotAt(b.id),
-          player_name: pl?.full_name ?? null, player_phone: pl?.phone ?? null,
-          is_own: b.player_id === currentUserId || p.submitted_by === currentUserId,
+          player_name: pl?.full_name ?? b.display_name ?? null, player_phone: pl?.phone ?? b.guest_phone ?? null,
+          is_own: bookedByMe(b) || p.submitted_by === currentUserId,
         }
       })
       .filter((r) => !q || [r.booking_reference, r.player_name, r.player_phone, r.reference_no].some((v) => v && String(v).toLowerCase().includes(q)))

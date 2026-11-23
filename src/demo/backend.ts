@@ -9,8 +9,6 @@ import type { SupabaseEnv } from '@/lib/supabase/env'
 import { afterWrite, canRead, canWrite, db, demoUsers, DemoError, onSignal, rpc, setCurrentUser, type Row } from './engine'
 import { storageBucket } from './payments'
 import { insertDefaults } from './community'
-import './sales'
-import './gallery'
 
 export const isDemoBackend = true
 

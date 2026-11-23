@@ -21,7 +21,7 @@ PSQL = ["psql", "-X", "-q", "-tA", "-h", os.environ.get("PGHOST", "127.0.0.1"),
         "-p", os.environ.get("PGPORT", "54322"), "-U", os.environ.get("PGUSER", "postgres"), "-d", DB]
 
 # RPCs exposed to the app. Test helpers living in public are excluded.
-RPC_PREFIXES = ("get_", "admin_", "staff_", "hold_", "release_", "confirm_", "cancel_", "submit_", "mark_", "register_", "withdraw_", "join_", "leave_", "report_")
+RPC_PREFIXES = ("guest_", "self_", "get_", "admin_", "staff_", "hold_", "release_", "confirm_", "cancel_", "submit_", "mark_", "register_", "withdraw_", "join_", "leave_", "report_")
 
 
 def q(sql: str):

@@ -11,15 +11,13 @@ import { addDays, manilaToday, toManilaInput } from '@/lib/time'
 import type { Database } from '@/types/database'
 
 type Fn = Database['public']['Functions']
-type Kind = 'revenue' | 'payments' | 'bookings' | 'check_ins' | 'registrations' | 'sales' | 'sales_items'
+type Kind = 'revenue' | 'payments' | 'bookings' | 'check_ins' | 'registrations'
 
 const kinds: { value: Kind; label: string; help: string }[] = [
   { value: 'revenue', label: 'Revenue by day', help: 'Money approved by staff (and cash recorded), by the day it was approved. Unchecked and rejected payments are not counted.' },
   { value: 'payments', label: 'Payments', help: 'Every payment submitted or recorded in the period, with its outcome and reviewer.' },
   { value: 'bookings', label: 'Bookings', help: 'Court bookings by playing date, and event-fee bookings by the date they were made.' },
   { value: 'check_ins', label: 'Check-ins (attendance)', help: 'Every check-in for court rentals and events.' },
-  { value: 'sales', label: 'Front-desk sales by day', help: 'Food, drinks and rentals sold at the desk, by day and payment method. Voided sales are not counted. Cost and profit show for administrators only.' },
-  { value: 'sales_items', label: 'Front-desk sales by item', help: 'How many of each item were sold or rented in the period, and for how much. Cost and profit show for administrators only.' },
   { value: 'registrations', label: 'Event registrations', help: 'Entries, categories, attendance and fees for one event.' },
 ]
 
@@ -93,27 +91,6 @@ const columns = {
     { header: 'Registered (Manila)', value: (r) => stamp(r.registered_at) },
     { header: 'Cancel reason', value: (r) => r.cancel_reason },
   ] satisfies CsvColumn<Fn['report_event_registrations']['Returns'][number]>[],
-  sales: [
-    { header: 'Date', value: (r) => r.day },
-    { header: 'Sales', value: (r) => r.sales },
-    { header: 'Food and drinks (PHP)', value: (r) => pesos(r.items_centavos) },
-    { header: 'Rentals (PHP)', value: (r) => pesos(r.rentals_centavos) },
-    { header: 'Cash (PHP)', value: (r) => pesos(r.cash_centavos) },
-    { header: 'GCash / Maya / bank (PHP)', value: (r) => pesos(r.online_centavos) },
-    { header: 'Total (PHP)', value: (r) => pesos(r.total_centavos) },
-    { header: 'Cost (PHP)', value: (r) => pesos(r.cost_centavos) },
-    { header: 'Profit (PHP)', value: (r) => pesos(r.profit_centavos) },
-    { header: 'Voided sales', value: (r) => r.voided },
-  ] satisfies CsvColumn<Fn['report_sales_daily']['Returns'][number]>[],
-  sales_items: [
-    { header: 'Category', value: (r) => r.category },
-    { header: 'Item', value: (r) => r.item },
-    { header: 'Type', value: (r) => (r.rental ? 'Rental' : 'Sale') },
-    { header: 'Quantity', value: (r) => r.quantity },
-    { header: 'Total (PHP)', value: (r) => pesos(r.total_centavos) },
-    { header: 'Cost (PHP)', value: (r) => pesos(r.cost_centavos) },
-    { header: 'Profit (PHP)', value: (r) => pesos(r.profit_centavos) },
-  ] satisfies CsvColumn<Fn['report_sales_items']['Returns'][number]>[],
 }
 
 interface Result {
@@ -145,21 +122,6 @@ async function runReport(kind: Kind, from: string, to: string, eventId: string, 
     if (error) throw toAppError(error)
     const rows = data ?? []
     return { kind, rows: rows.length, csv: toCsv(rows, columns.bookings), filename: `bookings_${range}.csv`, summary: null }
-  }
-  if (kind === 'sales') {
-    const { data, error } = await db.rpc('report_sales_daily', { _from: from, _to: to })
-    if (error) throw toAppError(error)
-    const rows = data ?? []
-    const total = rows.reduce((s, r) => s + r.total_centavos, 0)
-    const profit = rows.some((r) => r.profit_centavos !== null) ? rows.reduce((s, r) => s + (r.profit_centavos ?? 0), 0) : null
-    return { kind, rows: rows.length, csv: toCsv(rows, columns.sales), filename: `sales_${range}.csv`,
-      summary: `${formatPeso(total)} in front-desk sales${profit !== null ? ` · ${formatPeso(profit)} profit where costs are set` : ''}` }
-  }
-  if (kind === 'sales_items') {
-    const { data, error } = await db.rpc('report_sales_items', { _from: from, _to: to })
-    if (error) throw toAppError(error)
-    const rows = data ?? []
-    return { kind, rows: rows.length, csv: toCsv(rows, columns.sales_items), filename: `sales-by-item_${range}.csv`, summary: null }
   }
   if (kind === 'check_ins') {
     const { data, error } = await db.rpc('report_check_ins', { _from: from, _to: to })

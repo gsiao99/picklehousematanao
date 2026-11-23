@@ -1,12 +1,10 @@
 import { useCallback, useEffect } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Container } from '@/components/ui/Container'
 import { ErrorState, ListSkeleton } from '@/components/ui/states'
 import { useLiveQuery } from '@/features/booking/useLiveQuery'
 import { listEvents, type EventType } from '@/features/events/api'
 import { EventCard, NoEvents } from '@/features/events/components'
-import { playerRoutes } from '@/config/navigation'
-import { useInPlayerArea } from '@/features/player/area'
 import { cn } from '@/lib/cn'
 
 const tabs: { value: EventType | 'all'; label: string }[] = [
@@ -55,7 +53,6 @@ async function loadEvents(variant: 'all' | 'events' | 'open_play', type: EventTy
  */
 export function EventsPage({ variant = 'all' }: { variant?: 'all' | 'events' | 'open_play' }) {
   const [params, setParams] = useSearchParams()
-  const inPlayerArea = useInPlayerArea()
   const shownTabs = tabsFor(variant)
   const type = typeFor(variant, params.get('type'))
   const text = copy[variant]
@@ -77,11 +74,6 @@ export function EventsPage({ variant = 'all' }: { variant?: 'all' | 'events' | '
             </h1>
             <p className="mt-2 max-w-2xl text-brand-charcoal-500">{text.intro}</p>
           </div>
-          {inPlayerArea ? (
-            <Link to={playerRoutes.myEvents} className="shrink-0 font-semibold text-brand-green underline-offset-4 hover:underline">
-              My registrations
-            </Link>
-          ) : null}
         </div>
         {shownTabs.length > 0 ? (
         <div className="-mx-4 mt-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">

@@ -109,7 +109,7 @@ export const db: Record<string, Row[]> = {
     city: 'Matanao', province: 'Davao del Sur', map_url: null, phone: null, email: null,
     facebook_url: null, instagram_url: null, time_zone: 'Asia/Manila', booking_window_days: 30,
     hold_minutes: 15, verify_window_hours: 12, operating_day_cutoff: '04:00:00', max_slots_per_booking: 8,
-    player_cancel_cutoff_hours: 24, updated_at: nowIso(),
+    player_cancel_cutoff_hours: null, guest_cancel_cutoff_minutes: 30, guest_bookings_per_hour: 10, updated_at: nowIso(),
   }],
   // SAMPLE hours and prices for the demo only
   operating_hours: [0, 1, 2, 3, 4, 5, 6].map((d) => ({
@@ -128,7 +128,7 @@ export const db: Record<string, Row[]> = {
   ],
   profiles: demoUsers.map((u) => ({
     id: u.id, full_name: u.name, display_name: null, phone: `0900000000${demoUsers.indexOf(u) + 1}`, self_rated_level: 'intermediate',
-    level: 'intermediate', avatar_path: null, leaderboard_opt_out: false, status: 'active', privacy_consent_at: nowIso(),
+    level: 'intermediate', leaderboard_opt_out: false, status: 'active', privacy_consent_at: nowIso(),
     created_at: nowIso(), updated_at: nowIso(), email: u.email,
   })),
   bookings: [],
@@ -144,20 +144,21 @@ let refCounter = 0
 export function newReference() {
   refCounter += 1
   const d = local(nowIso()).date.replace(/-/g, '').slice(2)
-  return `DD-${d}-${String(refCounter).padStart(4, '0')}`
+  return `PH-${d}-${String(refCounter).padStart(4, '0')}`
 }
 
-// A few sample bookings by other players and a maintenance block, so the grid
-// shows what a busy day looks like.
+// A few SAMPLE guest bookings and a maintenance block, so the grid shows what
+// a busy day looks like. Names and numbers are made up.
 function seed() {
   const today = opDateOf(nowIso())
   const tomorrow = addDays(today, 1)
-  const book = (player: string, court: number, date: string, hours: number[]) => {
+  const book = (guest: string, court: number, date: string, hours: number[]) => {
     const id = uid()
-    db.bookings.push({ id, reference: newReference(), player_id: player, created_by: player, status: 'confirmed',
+    db.bookings.push({ id, reference: newReference(), player_id: null, created_by: null, status: 'confirmed',
       payment_status: 'paid', total_centavos: 0, hold_expires_at: null, verify_by: null, notes: null,
       created_at: nowIso(), updated_at: nowIso(), confirmed_at: nowIso(), cancelled_at: null, cancelled_by: null,
-      cancel_reason: null, expired_at: null, payment_due_at: null })
+      cancel_reason: null, expired_at: null, payment_due_at: null, display_name: `${guest} (sample)`,
+      display_name_hidden: false, guest_phone: `0917000${String(db.bookings.length + 1).padStart(4, '0')}` })
     for (const h of hours) {
       const start = atLocal(h >= 24 ? addDays(date, 1) : date, `${String(h % 24).padStart(2, '0')}:00`)
       const price = priceFor(`court-${court}`, start)
@@ -167,10 +168,10 @@ function seed() {
     }
     recalc(id)
   }
-  book('demo-marco', 2, today, [18, 19])
-  book('demo-joy', 1, today, [20])
-  book('demo-marco', 1, tomorrow, [7, 8])
-  book('demo-joy', 3, tomorrow, [18, 19, 20])
+  book('Marco', 2, today, [18, 19])
+  book('Joy', 1, today, [20])
+  book('Marco', 1, tomorrow, [7, 8])
+  book('Joy', 3, tomorrow, [18, 19, 20])
   insertSlot({ booking_id: null, court_id: 'court-2', start: atLocal(tomorrow, '10:00'), end: atLocal(tomorrow, '12:00'),
     kind: 'maintenance', status: 'confirmed', price_centavos: 0, note: 'Net replacement (sample)' })
 }
@@ -249,16 +250,64 @@ export function recalc(bookingId: string) {
     .reduce((sum, s) => sum + s.price_centavos, 0)
 }
 
-function expireStaleHolds() {
-  for (const b of db.bookings) {
-    if (b.status === 'held' && Date.parse(b.hold_expires_at) <= Date.now()) {
-      b.status = 'expired'
-      b.expired_at = nowIso()
-      for (const s of db.booking_slots) if (s.booking_id === b.id && s.status === 'held') {
-        s.status = 'released'
-        signal(s.operating_date)
-      }
-    }
+// ---------------------------------------------------------------------------
+// Guest bookings (mirror of the SQL guest functions; tokens kept in memory)
+// ---------------------------------------------------------------------------
+export function cleanName(name: unknown): string | null {
+  const c = String(name ?? '').replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim()
+  return c.length >= 1 && c.length <= 30 ? c : null
+}
+
+export function normalizePhone(phone: unknown): string | null {
+  const d = String(phone ?? '').replace(/\D/g, '')
+  if (/^09\d{9}$/.test(d)) return d
+  if (/^639\d{9}$/.test(d)) return `0${d.slice(2)}`
+  return null
+}
+
+function randomToken(): string {
+  const bytes = new Uint8Array(32)
+  globalThis.crypto.getRandomValues(bytes)
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+export function guestBooking(reference: unknown, token: unknown): Row | null {
+  const ref = String(reference ?? '').trim().toUpperCase()
+  return db.bookings.find((b) => b.reference === ref && !b.player_id && b._token && b._token === token) ?? null
+}
+
+const firstSlotAt = (bookingId: string) =>
+  db.booking_slots.filter((s) => s.booking_id === bookingId && s.status !== 'released' && s.status !== 'cancelled').map((s) => s._start as string).sort()[0] ?? null
+
+const maskPhone = (p: string | null) => (p ? `${p.slice(0, 4)}•••${p.slice(-4)}` : null)
+
+/** What guest_get_booking returns: the guest's own booking, phone masked. */
+export function guestView(b: Row): Row {
+  const cutoff = settings().guest_cancel_cutoff_minutes
+  const first = firstSlotAt(b.id)
+  const paid = db.payments.filter((p) => p.booking_id === b.id && p.status === 'approved').reduce((sum, p) => sum + p.amount_centavos, 0)
+  const due = Math.max(0, b.total_centavos - paid)
+  const cancelUntil = first ? new Date(Date.parse(first) - cutoff * 60_000).toISOString() : null
+  return {
+    reference: b.reference, status: b.status, payment_status: b.payment_status, display_name: b.display_name,
+    display_name_hidden: Boolean(b.display_name_hidden), phone_masked: maskPhone(b.guest_phone), created_at: b.created_at,
+    total_centavos: b.total_centavos, amount_due_centavos: due, payment_due_at: b.payment_due_at ?? null,
+    cancelled_at: b.cancelled_at, cancel_reason: b.cancel_reason, first_starts_at: first, cancel_until: cancelUntil,
+    can_cancel: b.status === 'confirmed' && Boolean(cancelUntil) && Date.now() < Date.parse(cancelUntil!),
+    slots: db.booking_slots.filter((s) => s.booking_id === b.id && s.status !== 'released').sort((x, y) => x._start.localeCompare(y._start)).map((s) => {
+      const c = db.courts.find((x) => x.id === s.court_id)
+      return { court_name: c?.name ?? 'Court', court_number: c?.number ?? 0, starts_at: s._start, ends_at: s._end, price_centavos: s.price_centavos, status: s.status }
+    }),
+    payments: db.payments.filter((p) => p.booking_id === b.id).map((p) => ({
+      method_kind: p.method_kind, method_label: db.payment_methods.find((m) => m.id === p.payment_method_id)?.label ?? p.method_kind,
+      amount_centavos: p.amount_centavos, status: p.status, reference_no: p.reference_no, submitted_at: p.created_at,
+      reviewed_at: p.reviewed_at, review_note: p.status === 'rejected' ? p.review_note : null,
+    })),
+    payment_methods: b.status === 'confirmed' && b.payment_status === 'unpaid' && due > 0
+      ? db.payment_methods.filter((m) => m.is_active).sort((x, y) => x.sort_order - y.sort_order).map((m) => ({
+          id: m.id, kind: m.kind, label: m.label, account_name: m.account_name, account_number: m.account_number,
+          bank_name: m.bank_name, qr_image_path: m.qr_image_path, instructions: m.instructions }))
+      : [],
   }
 }
 
@@ -336,7 +385,7 @@ export const rpc: Record<string, (args: Row) => unknown> = {
           const paid = lb?.payment_status === 'paid' || lb?.payment_status === 'waived'
           if (live.kind === 'rental') {
             status = live.status === 'held' ? (mine ? 'in_cart' : 'held') : mine ? 'mine' : paid ? 'booked' : 'pending'
-            if (live.status !== 'held' && lb?.display_name) label = lb.display_name
+            if (live.status !== 'held' && lb?.display_name && !lb.display_name_hidden) label = lb.display_name
           } else if (live.kind === 'maintenance') [status, label] = ['maintenance', 'Maintenance']
           else if (live.kind === 'private_event') [status, label] = ['private_event', 'Private event']
           else if (live.kind === 'block') [status, label] = ['blocked', 'Unavailable']
@@ -369,23 +418,29 @@ export const rpc: Record<string, (args: Row) => unknown> = {
       else if (!cur && (w.state !== 'open' || now < Date.parse(w.opens!) || now >= Date.parse(w.closes!))) status = 'closed'
       const nextStatus: Row = { rental: isPaid(next) ? 'booked' : 'reserved', maintenance: 'maintenance', block: 'blocked', private_event: 'private_event' }
       return { court_id: c.id, court_number: c.number, court_name: c.name, status,
-        label: cur?.kind === 'maintenance' ? 'Maintenance' : cur?.kind === 'private_event' ? 'Private event' : (bookingOf(cur)?.display_name ?? null),
+        label: cur?.kind === 'maintenance' ? 'Maintenance' : cur?.kind === 'private_event' ? 'Private event'
+          : bookingOf(cur)?.display_name_hidden ? null : (bookingOf(cur)?.display_name ?? null),
         until: cur?._end ?? null, next_starts_at: next?._start ?? null, next_status: next ? (nextStatus[next.kind] ?? 'event') : null,
         as_of: nowIso() }
     })
   },
 
-  hold_slots({ _slots }) {
-    const player = requirePlayer()
+  guest_create_booking({ _slots, _display_name, _phone }) {
+    const name = cleanName(_display_name)
+    const phone = normalizePhone(_phone)
+    if (!name) throw new DemoError('22023', 'Enter the name to show on the court board (up to 30 characters).')
+    if (!phone) throw new DemoError('22023', 'Enter a PH mobile number like 09171234567.')
     const requests = (Array.isArray(_slots) ? _slots : []) as Row[]
     if (requests.length === 0) throw new DemoError('22023', 'Choose at least one time slot.')
-    expireStaleHolds()
     const s = settings()
+    if (db.bookings.filter((b) => b.guest_phone === phone && Date.parse(b.created_at) > Date.now() - HOUR).length >= s.guest_bookings_per_hour)
+      throw new DemoError('PT429', 'Too many bookings from this number in the last hour. Try again later or contact the club.')
     const today = opDateOf(nowIso())
     // Validate everything first (all or nothing)
     const plan = requests
       .map((r) => ({ court: db.courts.find((c) => c.id === r.court_id), start: new Date(r.starts_at).toISOString() }))
       .sort((a, b) => `${a.court?.id}${a.start}`.localeCompare(`${b.court?.id}${b.start}`))
+    if (plan.length > s.max_slots_per_booking) throw new DemoError('22023', `One booking can hold up to ${s.max_slots_per_booking} court-hours.`)
     for (const p of plan) {
       if (!p.court || p.court.status === 'inactive') throw new DemoError('22023', 'That court is not available for booking.')
       if (p.court.status === 'maintenance') throw new DemoError('22023', `${p.court.name} is closed for maintenance.`)
@@ -396,91 +451,75 @@ export const rpc: Record<string, (args: Row) => unknown> = {
       const w = operatingWindow(date)
       if (w.state !== 'open' || Date.parse(p.start) < Date.parse(w.opens!) || Date.parse(p.start) + HOUR > Date.parse(w.closes!))
         throw new DemoError('22023', `The club is not open at ${fmtTime(p.start)} on that day.`)
-      if (!priceFor(p.court.id, p.start)) throw new DemoError('22023', `No court rate is set for ${p.court.name} at ${fmtTime(p.start)}. Contact the club.`)
+      if (!priceFor(p.court.id, p.start)) throw new DemoError('22023', `${p.court.name} at ${fmtTime(p.start)} cannot be booked online yet. Contact the club.`)
       const end = new Date(Date.parse(p.start) + HOUR).toISOString()
       if (db.booking_slots.some((x) => x.court_id === p.court!.id && isLive(x) && overlaps(p.start, end, x._start, x._end)))
-        throw new DemoError('23P01', `${p.court.name} at ${fmtTime(p.start)} was just taken. Remove it and try again.`)
+        throw new DemoError('23P01', `${p.court.name} at ${fmtTime(p.start)} was just taken. Choose another time.`)
     }
-    let cart = db.bookings.find((b) => b.player_id === player && b.status === 'held' && Date.parse(b.hold_expires_at) > Date.now())
-    const existing = cart ? db.booking_slots.filter((x) => x.booking_id === cart!.id && x.status === 'held').length : 0
-    if (existing + plan.length > s.max_slots_per_booking) throw new DemoError('22023', `One booking can hold up to ${s.max_slots_per_booking} court-hours.`)
-    if (!cart) {
-      cart = { id: uid(), reference: newReference(), player_id: player, created_by: player, status: 'held', payment_status: 'unpaid',
-        total_centavos: 0, hold_expires_at: new Date(Date.now() + s.hold_minutes * 60_000).toISOString(), verify_by: null, notes: null,
-        created_at: nowIso(), updated_at: nowIso(), confirmed_at: null, cancelled_at: null, cancelled_by: null, cancel_reason: null, expired_at: null }
-      db.bookings.push(cart)
-    }
+    const token = randomToken()
+    const b: Row = { id: uid(), reference: newReference(), player_id: null, created_by: null, status: 'confirmed', payment_status: 'unpaid',
+      total_centavos: 0, hold_expires_at: null, verify_by: null, notes: null, created_at: nowIso(), updated_at: nowIso(),
+      confirmed_at: nowIso(), cancelled_at: null, cancelled_by: null, cancel_reason: null, expired_at: null,
+      display_name: name, display_name_hidden: false, guest_phone: phone, _token: token }
+    db.bookings.push(b)
+    const slots: Row[] = []
     for (const p of plan) {
       const price = priceFor(p.court!.id, p.start)!
-      insertSlot({ booking_id: cart.id, court_id: p.court!.id, start: p.start, end: new Date(Date.parse(p.start) + HOUR).toISOString(),
-        kind: 'rental', status: 'held', price_centavos: price.price_centavos, price_breakdown: { label: price.label, tier: price.tier }, created_by: player })
+      slots.push(insertSlot({ booking_id: b.id, court_id: p.court!.id, start: p.start, end: new Date(Date.parse(p.start) + HOUR).toISOString(),
+        kind: 'rental', status: 'confirmed', price_centavos: price.price_centavos, price_breakdown: { label: price.label, tier: price.tier } }))
     }
-    recalc(cart.id)
-    return cart.id
-  },
-
-  release_held_slot({ _slot_id }) {
-    const player = requirePlayer()
-    const slot = db.booking_slots.find((s) => s.id === _slot_id && s.status === 'held')
-    const b = slot && db.bookings.find((x) => x.id === slot.booking_id && x.player_id === player && x.status === 'held')
-    if (!slot || !b) throw new DemoError('P0002', 'That time is no longer in your cart.')
-    slot.status = 'released'
-    signal(slot.operating_date)
-    if (!db.booking_slots.some((s) => s.booking_id === b.id && s.status === 'held')) {
-      Object.assign(b, { status: 'cancelled', cancelled_at: nowIso(), cancelled_by: player, cancel_reason: 'Cart emptied' })
-    }
+    b.payment_due_at = paymentDeadline(slots)
     recalc(b.id)
-    return null
+    return [{ reference: b.reference, token, total_centavos: b.total_centavos, payment_due_at: b.payment_due_at }]
   },
 
-  confirm_booking({ _booking_id }) {
-    const player = requirePlayer()
-    const b = db.bookings.find((x) => x.id === _booking_id)
-    if (!b || b.player_id !== player) throw new DemoError('P0002', 'That booking was not found.')
-    if (b.status === 'confirmed') return [{ status: 'confirmed', booking_id: b.id, reference: b.reference, total_centavos: b.total_centavos }]
-    if (b.status !== 'held') throw new DemoError('22023', 'This booking can no longer be confirmed.')
-    const slots = db.booking_slots.filter((s) => s.booking_id === b.id && s.status === 'held')
-    if (Date.parse(b.hold_expires_at) <= Date.now()) {
-      expireStaleHolds()
-      return [{ status: 'expired', booking_id: b.id, reference: b.reference, total_centavos: 0 }]
-    }
-    if (slots.length === 0) throw new DemoError('22023', 'Your cart is empty.')
-    for (const s of slots) {
-      const name = db.courts.find((c) => c.id === s.court_id)?.name ?? 'Court'
-      if (Date.parse(s._start) <= Date.now()) throw new DemoError('22023', `${name} at ${fmtTime(s._start)} has already started. Remove it to continue.`)
-    }
-    for (const s of slots) {
-      s.status = 'confirmed'
-      signal(s.operating_date)
-    }
-    Object.assign(b, { status: 'confirmed', confirmed_at: nowIso(), hold_expires_at: null, payment_due_at: paymentDeadline(slots) })
-    recalc(b.id)
-    return [{ status: 'confirmed', booking_id: b.id, reference: b.reference, total_centavos: b.total_centavos }]
+  guest_get_booking({ _reference, _token }) {
+    const b = guestBooking(_reference, _token)
+    return b ? guestView(b) : { error: 'not_found' }
   },
 
-  cancel_booking({ _booking_id, _reason }) {
-    const me = currentUserId
-    if (!me) throw new DemoError('42501', 'Sign in to manage bookings.')
-    const b = db.bookings.find((x) => x.id === _booking_id)
-    const owner = b?.player_id === me
-    const staff = can('bookings.cancel')
-    if (!b || (!owner && !staff)) throw new DemoError('P0002', 'That booking was not found.')
-    if (b.status !== 'held' && b.status !== 'confirmed') throw new DemoError('22023', `This booking is already ${b.status}.`)
-    let why = 'Cart cancelled'
-    if (staff && !(owner && b.status === 'held')) why = requireReason(_reason)
-    else if (b.status === 'confirmed') {
-      const cutoff = settings().player_cancel_cutoff_hours
-      if (cutoff === null) throw new DemoError('42501', 'Contact the club to cancel a confirmed booking.')
-      const first = db.booking_slots.filter((s) => s.booking_id === b.id).map((s) => Date.parse(s._start)).sort()[0]
-      if (first && first - Date.now() < cutoff * HOUR) throw new DemoError('42501', `Bookings can be cancelled up to ${cutoff} hours before the first time slot.`)
-      why = typeof _reason === 'string' && _reason.trim() ? _reason.trim() : 'Cancelled by player'
-    }
+  guest_cancel_booking({ _reference, _token, _reason }) {
+    const b = guestBooking(_reference, _token)
+    if (!b) return { error: 'not_found' }
+    if (b.status !== 'confirmed') throw new DemoError('22023', `This booking is already ${b.status}.`)
+    const cutoff = settings().guest_cancel_cutoff_minutes
+    const first = firstSlotAt(b.id)
+    if (!first || Date.now() >= Date.parse(first) - cutoff * 60_000)
+      throw new DemoError('22023', `Bookings can be cancelled online up to ${cutoff} minutes before the start. Contact the club.`)
     for (const s of db.booking_slots) if (s.booking_id === b.id && (s.status === 'held' || s.status === 'confirmed')) {
       s.status = 'cancelled'
       signal(s.operating_date)
     }
-    Object.assign(b, { status: 'cancelled', cancelled_at: nowIso(), cancelled_by: me, cancel_reason: why,
+    Object.assign(b, { status: 'cancelled', cancelled_at: nowIso(), cancelled_by: null,
+      cancel_reason: typeof _reason === 'string' && _reason.trim() ? _reason.trim().slice(0, 300) : 'Cancelled by guest',
       payment_status: b.payment_status === 'paid' || b.payment_status === 'pending_verification' ? 'refund_due' : b.payment_status })
+    return guestView(b)
+  },
+
+  cancel_booking({ _booking_id, _reason }) {
+    if (!can('bookings.cancel')) throw new DemoError('42501', 'You do not have permission to cancel bookings.')
+    const why = requireReason(_reason)
+    const b = db.bookings.find((x) => x.id === _booking_id)
+    if (!b) throw new DemoError('P0002', 'That booking was not found.')
+    if (b.status !== 'held' && b.status !== 'confirmed') throw new DemoError('22023', `This booking is already ${b.status}.`)
+    for (const s of db.booking_slots) if (s.booking_id === b.id && (s.status === 'held' || s.status === 'confirmed')) {
+      s.status = 'cancelled'
+      signal(s.operating_date)
+    }
+    Object.assign(b, { status: 'cancelled', cancelled_at: nowIso(), cancelled_by: currentUserId, cancel_reason: why,
+      payment_status: b.payment_status === 'paid' || b.payment_status === 'pending_verification' ? 'refund_due' : b.payment_status })
+    return null
+  },
+
+  staff_set_booking_display_name({ _booking_id, _name, _hidden, _reason }) {
+    if (!can('bookings.manage')) throw new DemoError('42501', 'You do not have permission to change bookings.')
+    requireReason(_reason)
+    const b = db.bookings.find((x) => x.id === _booking_id)
+    if (!b) throw new DemoError('P0002', 'That booking was not found.')
+    const name = cleanName(_name)
+    if (!name && !b.player_id) throw new DemoError('22023', 'A guest booking needs a name of 1 to 30 characters. Hide it instead to keep it off the board.')
+    Object.assign(b, { display_name: name, display_name_hidden: Boolean(_hidden) })
+    signal(opDateOf(firstSlotAt(b.id) ?? nowIso()))
     return null
   },
 
@@ -507,7 +546,6 @@ export const rpc: Record<string, (args: Row) => unknown> = {
     const start = new Date(_starts_at).toISOString()
     const end = new Date(_ends_at).toISOString()
     if (Date.parse(end) <= Date.parse(start)) throw new DemoError('22023', 'The end time must be after the start time.')
-    expireStaleHolds()
     for (const id of _court_ids as string[]) {
       const clash = db.booking_slots.find((x) => x.court_id === id && isLive(x) && overlaps(start, end, x._start, x._end))
       if (clash) {

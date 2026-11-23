@@ -12,7 +12,7 @@ import { formatPeso } from '@/lib/money'
 import { formatDateTime } from '@/lib/time'
 import { eventDateText } from './format'
 import { cn } from '@/lib/cn'
-import { useEventPath } from '@/features/player/area'
+import { publicEventPath } from '@/config/navigation'
 import {
   eventTypeLabel,
   feeText,
@@ -29,7 +29,7 @@ import {
 } from './api'
 
 export function EventCard({ event: e }: { event: PublicEvent }) {
-  const eventPath = useEventPath()
+  const eventPath = publicEventPath
   const full = e.spots_left === 0
   return (
     <Link

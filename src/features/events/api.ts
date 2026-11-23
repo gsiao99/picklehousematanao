@@ -138,9 +138,6 @@ export const getWhosPlaying = async (eventId: string) =>
 export type MyRegistration = Fn['get_my_registrations']['Returns'][number]
 export const getMyRegistrations = async () => (await call(db().rpc('get_my_registrations'))) ?? []
 
-export type MyPayment = Fn['get_my_payments']['Returns'][number]
-export const getMyPayments = async () => (await call(db().rpc('get_my_payments'))) ?? []
-
 export type PlayHistoryRow = Fn['get_my_play_history']['Returns'][number]
 export const getMyPlayHistory = async () => (await call(db().rpc('get_my_play_history', {}))) ?? []
 

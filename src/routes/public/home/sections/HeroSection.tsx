@@ -2,8 +2,7 @@ import { Link } from 'react-router-dom'
 import { MapPin } from 'lucide-react'
 import { buttonStyles } from '@/components/ui/buttonStyles'
 import { Container } from '@/components/ui/Container'
-import { playerRoutes, routes } from '@/config/navigation'
-import { useAuth } from '@/features/auth/context'
+import { routes } from '@/config/navigation'
 import { EntranceLink } from '@/features/entrance/EntranceLink'
 import { loadClubNow } from '@/features/booking/clubNow'
 import { useLiveQuery } from '@/features/booking/useLiveQuery'
@@ -44,8 +43,6 @@ function OpenNow() {
 }
 
 export function HeroSection() {
-  const auth = useAuth()
-  const signedIn = auth.status === 'signed_in'
   return (
     <section
       aria-labelledby="hero-title"
@@ -73,14 +70,14 @@ export function HeroSection() {
         </p>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <EntranceLink to={signedIn ? playerRoutes.dashboard : routes.book} className={buttonStyles({ variant: 'accent', size: 'lg' })}>
-            {signedIn ? 'Go to my dashboard' : 'Book a court'}
+          <EntranceLink to={routes.book} className={buttonStyles({ variant: 'accent', size: 'lg' })}>
+            Book a court
           </EntranceLink>
           <Link
             to={{ pathname: routes.home, hash: '#courts' }}
             className={buttonStyles({ variant: 'outline-inverse', size: 'lg' })}
           >
-            View Courts
+            View courts
           </Link>
         </div>
 

@@ -3,8 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { Volume2, VolumeX } from 'lucide-react'
 import { LogoMark } from '@/components/brand/Logo'
 import { useLiveQuery } from '@/features/booking/useLiveQuery'
-import { checkInPath, getSessionBoard, type BoardCourt, type SessionBoard } from '@/features/open-play/courtDay'
-import { QrCode } from '@/features/open-play/QrCode'
+import { getSessionBoard, type BoardCourt, type SessionBoard } from '@/features/open-play/courtDay'
 import { playChime } from '@/features/notifications/chime'
 import { cn } from '@/lib/cn'
 import { formatTime } from '@/lib/time'
@@ -27,7 +26,6 @@ export function CourtBoardPage() {
   const [params] = useSearchParams()
   const code = params.get('k') ?? ''
   // Optional: with the check-in code, the board shows the check-in QR too.
-  const checkinCode = params.get('c')
   // Database time minus this screen's time (taken when the board was read), so timers are right even if the TV clock is off.
   const load = useCallback(async () => {
     const b = await getSessionBoard(eventId, code)
@@ -80,7 +78,6 @@ export function CourtBoardPage() {
   }
 
   const perGame = board?.players_per_game ?? 4
-  const checkInUrl = checkinCode ? window.location.origin + checkInPath(eventId, checkinCode) : null
 
   return (
     <main className="board-bg flex min-h-dvh flex-col gap-6 p-5 text-white sm:p-8">
@@ -134,15 +131,6 @@ export function CourtBoardPage() {
             ) : (
               <NextUp id="next-up" title="Next up" names={board.next} waiting={board.waiting} perGame={perGame} />
             )}
-            {checkInUrl ? (
-              <section aria-label="Check in" className="board-glass flex items-center gap-4 rounded-(--radius-tile) p-4">
-                <QrCode value={checkInUrl} label="Scan to check in" className="w-24 shrink-0 rounded-lg" />
-                <p className="text-sm text-white/70">
-                  <span className="block text-base font-semibold text-white">Scan to check in</span>
-                  Booked for this session? Scan with your phone camera to join the stack.
-                </p>
-              </section>
-            ) : null}
           </aside>
         </div>
       ) : (

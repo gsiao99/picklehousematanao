@@ -33,7 +33,7 @@ export class AppError extends Error {
 }
 
 const messages: Record<AppErrorCode, string> = {
-  backend_unconfigured: 'Player accounts are not connected yet.',
+  backend_unconfigured: 'Online booking is not connected yet.',
   network: 'Could not reach the server. Check your connection and try again.',
   invalid_credentials: 'That email and password do not match. Check them and try again.',
   email_not_confirmed: 'Confirm your email first. Open the link we sent you, then sign in.',
@@ -90,13 +90,14 @@ const dbCodes: Record<string, AppErrorCode> = {
   '23505': 'conflict', // unique
   '23P01': 'conflict', // exclusion (overlapping booking)
   P0002: 'not_found', // our RPCs: no data found (message is user-facing)
+  PT429: 'rate_limited', // our RPCs: too many guest bookings or uploads (message is user-facing)
   PGRST116: 'not_found', // .single() found no row
   PGRST301: 'session_expired', // JWT expired
   PGRST303: 'session_expired',
 }
 
 // Codes where our own SQL functions raise a message written for people.
-const passThroughDbCodes = new Set(['22023', 'P0002', '42501', '23505', '23P01'])
+const passThroughDbCodes = new Set(['22023', 'P0002', '42501', '23505', '23P01', 'PT429'])
 
 export function toAppError(error: unknown): AppError {
   if (error instanceof AppError) return error

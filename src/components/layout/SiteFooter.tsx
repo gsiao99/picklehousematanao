@@ -100,7 +100,12 @@ export function SiteFooter() {
           <p>
             © {CURRENT_YEAR} {venue.name}
           </p>
-          <p>All times shown in Philippine time.</p>
+          <p className="flex flex-wrap gap-x-4">
+            <span>All times shown in Philippine time.</span>
+            <Link to={routes.signIn} className="underline-offset-4 hover:text-white hover:underline">
+              Staff sign in
+            </Link>
+          </p>
         </Container>
       </div>
     </footer>

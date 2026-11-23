@@ -16,35 +16,21 @@ export const primaryNav: NavItem[] = [
   { label: 'Find us', sectionId: 'find-us' },
 ]
 
-/** Signed-in player area. Everything here sits behind `RequirePlayer`. */
-export const playerRoutes = {
-  dashboard: '/player/dashboard',
-  book: '/player/book',
-  openPlay: '/player/open-play',
-  events: '/player/events',
-  myEvents: '/player/events/mine',
-  paddleStacking: '/player/paddle-stacking',
-  /** Opened from the desk QR code: ?e=<event id>&c=<check-in code> */
-  checkIn: '/player/check-in',
-  bookings: '/player/bookings',
-  payments: '/player/payments',
-  history: '/player/history',
-  leaderboard: '/player/leaderboard',
-  cafe: '/player/cafe',
-  notifications: '/player/notifications',
-  profile: '/player/profile',
-} as const
-
 export const routes = {
   home: '/',
   courts: '/courts',
   openPlay: '/open-play',
+  /** Book a court as a guest (no account). */
+  book: '/book',
+  /** Manage links: /booking/<reference>#<token> (bookingManagePath). */
+  manageBooking: '/booking',
+  /** Bookings whose manage links are saved on this device. */
+  myBookings: '/my-bookings',
+  /** Staff sign-in (there are no player accounts). */
   signIn: '/login',
-  register: '/signup',
   forgotPassword: '/forgot-password',
   resetPassword: '/reset-password',
   authCallback: '/auth/callback',
-  account: playerRoutes.profile,
   admin: '/admin',
   adminPayments: '/admin/payments',
   adminBookings: '/admin/bookings',
@@ -54,67 +40,49 @@ export const routes = {
   adminSettings: '/admin/settings',
   adminEvents: '/admin/events',
   adminReports: '/admin/reports',
-  adminSales: '/admin/sales',
-  adminInventory: '/admin/inventory',
-  adminPhotos: '/admin/photos',
-  book: playerRoutes.book,
-  bookings: playerRoutes.bookings,
   live: '/live',
   /** TV court board: /board/<event id>?k=<board code> */
   board: '/board',
-  notifications: playerRoutes.notifications,
   events: '/events',
-  myEvents: playerRoutes.myEvents,
-  payments: playerRoutes.payments,
-  history: playerRoutes.history,
-  leaderboard: playerRoutes.leaderboard,
   styleguide: '/styleguide',
 } as const
 
-export const bookingPath = (bookingId: string) => `${playerRoutes.bookings}/${bookingId}`
+/**
+ * A guest's private manage link. The token goes in the URL fragment, which
+ * browsers never send to any server (not even in the Referer header).
+ */
+export const bookingManagePath = (reference: string, token?: string) =>
+  `${routes.manageBooking}/${encodeURIComponent(reference)}${token ? `#${token}` : ''}`
 export const publicEventPath = (slug: string) => `/events/${slug}`
-export const playerEventPath = (slug: string) => `${playerRoutes.events}/${slug}`
 /** Staff: full details of one booking. */
 export const adminBookingPath = (id: string) => `${routes.adminBookings}/${id}`
 
 /**
- * Paths from before the player area existed (old links, bookmarks, links
- * stored in notifications) and where they live now.
+ * Paths from the old player area (bookmarks, shared links) and where they
+ * live now. Player accounts were removed: bookings are managed by link.
  */
 export function currentPathFor(path: string): string {
   const [pathname, rest = ''] = path.split(/(?=[?#])/)
-  const map: [RegExp, (m: RegExpMatchArray) => string][] = [
-    [/^\/book\/?$/, () => playerRoutes.book],
-    [/^\/bookings\/?$/, () => playerRoutes.bookings],
-    [/^\/bookings\/([^/]+)$/, (m) => bookingPath(m[1])],
-    [/^\/payments\/?$/, () => playerRoutes.payments],
-    [/^\/history\/?$/, () => playerRoutes.history],
-    [/^\/leaderboard\/?$/, () => playerRoutes.leaderboard],
-    [/^\/notifications\/?$/, () => playerRoutes.notifications],
-    [/^\/account\/?$/, () => playerRoutes.profile],
-    [/^\/my\/events\/?$/, () => playerRoutes.myEvents],
+  const map: [RegExp, () => string][] = [
+    [/^\/(player\/)?book\/?$/, () => routes.book],
+    [/^\/(player\/)?bookings(\/[^/]+)?\/?$/, () => routes.myBookings],
+    [/^\/player\/(open-play)\/?$/, () => routes.openPlay],
+    [/^\/player\/events(\/mine)?\/?$/, () => routes.events],
+    [/^\/(player(\/.*)?|payments|history|leaderboard|notifications|account|my\/events)\/?$/, () => routes.home],
   ]
   for (const [re, to] of map) {
-    const m = pathname.match(re)
-    if (m) return to(m) + rest
+    if (re.test(pathname)) return to() + (to() === routes.home ? '' : rest)
   }
   return path
-}
-
-/** Where a notification link should open for a signed-in player. */
-export function notificationPath(link: string): string {
-  const current = currentPathFor(link)
-  const event = current.match(/^\/events\/([^/?#]+)(.*)$/)
-  return event ? playerEventPath(event[1]) + event[2] : current
 }
 
 const hasUnsafeCharacters = (value: string) => [...value].some((c) => c === '\\' || c.charCodeAt(0) < 32)
 
 /** Screens a signed-in person must never be sent back to (they would loop). */
-const authPaths = ['/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback']
+const authPaths = ['/login', '/forgot-password', '/reset-password', '/auth/callback']
 
 /** Only same-site paths are allowed as ?next= targets (no open redirects). */
-export function safeNextPath(next: string | null | undefined, fallback: string = playerRoutes.dashboard): string {
+export function safeNextPath(next: string | null | undefined, fallback: string = routes.admin): string {
   if (!next || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\') || hasUnsafeCharacters(next)) return fallback
   const pathname = next.split(/[?#]/)[0]
   if (authPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return fallback
@@ -123,13 +91,13 @@ export function safeNextPath(next: string | null | undefined, fallback: string =
 
 /**
  * Where to go after signing in. Staff and administrators start on the staff
- * dashboard, players on the player dashboard. A requested page is honoured
- * only if it is a safe same-site path the person may open; admin pages are
- * never offered to someone without a staff role. The database still checks
- * every read and write.
+ * dashboard. An account without a staff role (not yet granted one) goes to
+ * the homepage. A requested page is honoured only if it is a safe same-site
+ * path the person may open; admin pages are never offered to someone without
+ * a staff role. The database still checks every read and write.
  */
 export function postSignInPath(next: string | null | undefined, who: { isStaff: boolean }): string {
-  const fallback = who.isStaff ? routes.admin : playerRoutes.dashboard
+  const fallback = who.isStaff ? routes.admin : routes.home
   const target = safeNextPath(next, fallback)
   if (!who.isStaff && (target === '/admin' || target.startsWith('/admin/') || target.startsWith('/admin?'))) return fallback
   return target

@@ -1,27 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { Check, Copy, Upload } from 'lucide-react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { Banknote, Check, Copy, Upload } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Alert, SubmitButton, TextField } from '@/components/ui/form'
-import { ErrorState, ListSkeleton } from '@/components/ui/states'
-import type { Booking } from '@/features/booking/api'
-import { useLiveQuery } from '@/features/booking/useLiveQuery'
+import { checkProofFile, methodKindLabel, PROOF_TYPES, type SubmissionStatus } from '@/features/payments/api'
+import { PrivateImage } from '@/features/payments/PrivateImage'
+import { cn } from '@/lib/cn'
 import { toAppError } from '@/lib/errors'
 import { formatPeso, pesosToCentavos } from '@/lib/money'
 import { formatDateTime } from '@/lib/time'
-import { cn } from '@/lib/cn'
-import {
-  checkProofFile,
-  getPaymentInstructions,
-  listBookingPayments,
-  methodKindLabel,
-  PROOF_TYPES,
-  submitPayment,
-  type PaymentInstructions,
-  type PaymentMethodOption,
-  type PaymentRecord,
-  type SubmissionStatus,
-} from './api'
-import { PrivateImage } from './PrivateImage'
+import { submitGuestPayment, type GuestBooking, type GuestPaymentMethod } from './api'
 
 const submissionText: Record<SubmissionStatus, string> = {
   submitted: 'Waiting for check',
@@ -30,19 +17,23 @@ const submissionText: Record<SubmissionStatus, string> = {
 }
 
 /**
- * The payment section of a booking. Players pay outside the app, upload a
- * receipt, and wait for staff to check it. Nothing here marks a booking paid.
+ * Paying for a guest booking. The guest pays outside the app, uploads a
+ * receipt through the manage link, and staff check it; or pays cash at the
+ * desk. Nothing here marks a booking paid.
  */
-export function PaymentPanel({ booking, userId, onChanged }: { booking: Booking; userId: string; onChanged: () => void }) {
-  const canPay = booking.playerId === userId && booking.status === 'confirmed' && booking.paymentStatus === 'unpaid'
-  const loadHistory = useCallback(() => listBookingPayments(booking.id), [booking.id])
-  const history = useLiveQuery(`payments:${booking.id}:${booking.paymentStatus}`, loadHistory, { watchDates: [] })
-
-  const latest = history.state.status === 'ready' ? history.state.data[0] : undefined
-
-  if (booking.status !== 'confirmed' && booking.paymentStatus === 'unpaid' && history.state.status === 'ready' && history.state.data.length === 0) {
-    return null
-  }
+export function GuestPaymentPanel({
+  booking,
+  token,
+  onChanged,
+}: {
+  booking: GuestBooking
+  token: string
+  onChanged: () => void
+}) {
+  const online = booking.paymentMethods.filter((m) => m.kind !== 'cash')
+  const cash = booking.paymentMethods.find((m) => m.kind === 'cash')
+  const canPay = booking.status === 'confirmed' && booking.paymentStatus === 'unpaid' && booking.amountDueCentavos > 0
+  if (!canPay && booking.payments.length === 0) return null
 
   return (
     <section aria-labelledby="payment-title" className="mt-8 border-t border-brand-green-100 pt-6">
@@ -50,125 +41,79 @@ export function PaymentPanel({ booking, userId, onChanged }: { booking: Booking;
         Payment
       </h2>
       <div className="mt-4 flex flex-col gap-4">
-        <PaymentStatusMessage booking={booking} latest={latest} payments={history.state.status === 'ready' ? history.state.data : []} />
-        {canPay ? <PayForm booking={booking} userId={userId} onSubmitted={onChanged} /> : null}
-        {history.state.status === 'loading' ? <ListSkeleton rows={1} label="Loading payments" /> : null}
-        {history.state.status === 'error' ? (
-          <ErrorState title="Payments could not load" message={history.state.error.message} onRetry={history.refresh} />
+        <PaymentStatusMessage booking={booking} />
+        {canPay && online.length > 0 ? <PayForm booking={booking} token={token} methods={online} onSubmitted={onChanged} /> : null}
+        {canPay && cash ? (
+          <div className="flex gap-3 rounded-xl border border-brand-green-200 p-4">
+            <Banknote className="mt-0.5 size-5 shrink-0 text-brand-green" aria-hidden="true" />
+            <p className="text-sm">
+              <span className="font-semibold">{online.length > 0 ? 'Or pay in cash at the desk.' : 'Pay in cash at the desk.'}</span>{' '}
+              Show your reference <span className="font-semibold">{booking.reference}</span>; staff record the payment.
+              {cash.instructions ? <span className="mt-1 block whitespace-pre-line">{cash.instructions}</span> : null}
+            </p>
+          </div>
         ) : null}
-        {history.state.status === 'ready' && history.state.data.length > 0 ? (
-          <PaymentHistory payments={history.state.data} />
+        {canPay && online.length === 0 && !cash ? (
+          <Alert title="Payment details are to be announced">Contact the club to arrange payment.</Alert>
         ) : null}
+        {booking.payments.length > 0 ? <PaymentHistory booking={booking} /> : null}
       </div>
     </section>
   )
 }
 
-function PaymentStatusMessage({ booking, latest, payments }: { booking: Booking; latest: PaymentRecord | undefined; payments: PaymentRecord[] }) {
-  const received = payments.filter((p) => p.status === 'approved').reduce((n, p) => n + p.amountCentavos, 0)
-  switch (booking.paymentStatus) {
-    case 'pending_verification':
-      return (
-        <Alert title="We’re checking your payment">
-          You’ll get a notification here when the club approves it or if there’s a problem. Your booking stays confirmed
-          meanwhile.
-        </Alert>
-      )
-    case 'paid':
-      return (
-        <Alert tone="success" title="Paid">
-          The club has verified your payment{latest?.reviewedAt ? ` (${formatDateTime(latest.reviewedAt)})` : ''}.
-        </Alert>
-      )
-    case 'refund_due':
-      return <Alert title="Refund due">The club has recorded that this payment will be refunded.</Alert>
-    case 'refunded':
-      return <Alert tone="success" title="Refunded">The club has recorded your refund.</Alert>
-    case 'waived':
-      return <Alert tone="success" title="No payment needed">The club has waived payment for this booking.</Alert>
-    case 'unpaid':
-      if (received > 0 && booking.status === 'confirmed') {
-        return (
-          <Alert tone="error" title="Partly paid">
-            The club received {formatPeso(received)} of {formatPeso(booking.totalCentavos)}.{' '}
-            <strong>{formatPeso(Math.max(booking.totalCentavos - received, 0))} is still due.</strong> Send the rest below and
-            upload its receipt.
-          </Alert>
-        )
-      }
-      if (latest?.status === 'rejected' && booking.status === 'confirmed') {
-        return (
-          <Alert tone="error" title="Your last payment was not accepted">
-            {latest.reviewNote ? <>Reason: {latest.reviewNote}. </> : null}
-            Submit a new payment below.
-          </Alert>
-        )
-      }
-      return null
+function PaymentStatusMessage({ booking }: { booking: GuestBooking }) {
+  const latest = booking.payments.at(-1)
+  if (booking.paymentStatus === 'pending_verification') {
+    return <Alert title="Payment being checked">The club is checking your receipt. This page shows the result.</Alert>
   }
-}
-
-function PaymentHistory({ payments }: { payments: PaymentRecord[] }) {
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-brand-charcoal-500">Payment history</h3>
-      <ul className="mt-2 divide-y divide-brand-green-100 rounded-xl border border-brand-green-100">
-        {payments.map((p) => (
-          <li key={p.id} className="flex flex-col gap-1 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="font-semibold">
-                {methodKindLabel[p.methodKind]} · {formatPeso(p.status === 'submitted' && p.declaredCentavos ? p.declaredCentavos : p.amountCentavos)}
-                {p.status === 'approved' && p.declaredCentavos && p.declaredCentavos !== p.amountCentavos ? (
-                  <span className="font-normal text-brand-charcoal-500"> received (you entered {formatPeso(p.declaredCentavos)})</span>
-                ) : null}
-              </p>
-              <p className="text-brand-charcoal-500">
-                Sent {formatDateTime(p.submittedAt)}
-                {p.referenceNo ? ` · Ref. ${p.referenceNo}` : ''}
-              </p>
-              {p.status === 'rejected' && p.reviewNote ? <p className="text-red-800">{p.reviewNote}</p> : null}
-            </div>
-            <Badge tone={p.status === 'approved' ? 'charcoal' : 'outline'} className="self-start sm:self-auto">
-              {submissionText[p.status]}
-            </Badge>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function PayForm({ booking, userId, onSubmitted }: { booking: Booking; userId: string; onSubmitted: () => void }) {
-  const load = useCallback(() => getPaymentInstructions(booking.id), [booking.id])
-  const { state, refresh } = useLiveQuery(`pay:${booking.id}`, load, { watchDates: [], pollMs: 120_000 })
-
-  if (state.status === 'loading') return <ListSkeleton rows={2} label="Loading payment options" />
-  if (state.status === 'error') {
-    return <ErrorState title="Payment options could not load" message={state.error.message} onRetry={refresh} />
+  if (booking.paymentStatus === 'paid') return <Alert tone="success" title="Paid">Your payment was received. See you on court!</Alert>
+  if (booking.paymentStatus === 'refund_due') {
+    return <Alert title="Refund due">The club will refund your payment. Contact the club if you have questions.</Alert>
   }
-  if (state.data.methods.length === 0) {
+  if (booking.paymentStatus === 'refunded') return <Alert title="Refunded">Your payment was refunded.</Alert>
+  if (latest?.status === 'rejected') {
     return (
-      <Alert title="Online payment is not set up yet">
-        The club has not added its GCash, Maya or bank details yet. Contact the club to arrange payment.
+      <Alert tone="error" title="Your last receipt was not accepted">
+        {latest.reviewNote ?? 'Check the amount and details, then send a new receipt.'}
       </Alert>
     )
   }
-  return <PayFormReady booking={booking} userId={userId} info={state.data} onSubmitted={onSubmitted} />
+  return null
 }
 
-function PayFormReady({
+function PaymentHistory({ booking }: { booking: GuestBooking }) {
+  return (
+    <details className="rounded-xl border border-brand-green-100 p-4">
+      <summary className="cursor-pointer font-semibold">Payment history ({booking.payments.length})</summary>
+      <ul className="mt-3 flex flex-col gap-2">
+        {[...booking.payments].reverse().map((p) => (
+          <li key={p.submittedAt} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span>
+              {formatDateTime(p.submittedAt)} · {p.methodLabel || methodKindLabel[p.methodKind]} · {formatPeso(p.amountCentavos)}
+              {p.referenceNo ? ` · ${p.referenceNo}` : ''}
+            </span>
+            <Badge tone={p.status === 'approved' ? 'green' : 'outline'}>{submissionText[p.status]}</Badge>
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}
+
+function PayForm({
   booking,
-  userId,
-  info,
+  token,
+  methods,
   onSubmitted,
 }: {
-  booking: Booking
-  userId: string
-  info: PaymentInstructions
+  booking: GuestBooking
+  token: string
+  methods: GuestPaymentMethod[]
   onSubmitted: () => void
 }) {
-  const [methodId, setMethodId] = useState(info.methods[0]?.id ?? '')
-  const method = info.methods.find((m) => m.id === methodId) ?? info.methods[0]
+  const [methodId, setMethodId] = useState(methods[0]?.id ?? '')
+  const method = methods.find((m) => m.id === methodId) ?? methods[0]
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
@@ -178,7 +123,7 @@ function PayFormReady({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const previewRef = useRef<string | null>(null)
-  const amount = info.amountDueCentavos ?? booking.totalCentavos
+  const amount = booking.amountDueCentavos
 
   useEffect(
     () => () => {
@@ -206,7 +151,7 @@ function PayFormReady({
     setFile(next)
   }
 
-  const bookingRef = info.bookingReference ?? booking.reference
+  const bookingRef = booking.reference
   async function copyRef() {
     try {
       await navigator.clipboard.writeText(bookingRef)
@@ -240,7 +185,14 @@ function PayFormReady({
     }
     setBusy(true)
     try {
-      await submitPayment({ userId, bookingId: booking.id, methodId: method.id, file, referenceNo: reference, amountCentavos: sentCentavos })
+      await submitGuestPayment({
+          reference: booking.reference,
+          token,
+          paymentMethodId: method.id,
+          file,
+          referenceNo: reference,
+          declaredCentavos: sentCentavos,
+        })
       onSubmitted()
     } catch (err) {
       setError(toAppError(err).message)
@@ -269,9 +221,9 @@ function PayFormReady({
             </button>
           </p>
         </div>
-        {info.dueAt ? (
+        {booking.paymentDueAt ? (
           <p className="w-full text-sm text-brand-charcoal">
-            Pay by <strong>{formatDateTime(info.dueAt)}</strong>. Unpaid bookings are cancelled after this time.
+            Pay by <strong>{formatDateTime(booking.paymentDueAt)}</strong>. Unpaid bookings are cancelled after this time.
           </p>
         ) : null}
       </div>
@@ -279,7 +231,7 @@ function PayFormReady({
       <fieldset>
         <legend className="text-[0.9375rem] font-semibold">1. Choose how you’ll pay</legend>
         <div className="mt-2 grid gap-2 sm:grid-cols-3">
-          {info.methods.map((m) => (
+          {methods.map((m) => (
             <label
               key={m.id}
               className={cn(
@@ -308,7 +260,7 @@ function PayFormReady({
           3. Upload a screenshot of your payment
         </label>
         <p id="proof-hint" className="text-sm text-brand-charcoal-500">
-          JPG, PNG or WebP, up to 5 MB. Only you and the club’s payment staff can see it.
+          JPG, PNG or WebP, up to 5 MB. Only the club’s payment staff can see it.
         </p>
         <label
           className={cn(
@@ -363,14 +315,14 @@ function PayFormReady({
           <SubmitButton busy={busy}>Submit payment for checking</SubmitButton>
         </div>
         <p id="pay-note" className="text-sm text-brand-charcoal-500">
-          Submitting does not mark your booking paid. The club checks every payment and you’ll be notified of the result.
+          Submitting does not mark your booking paid. The club checks every payment; the result shows on this page.
         </p>
       </div>
     </form>
   )
 }
 
-function MethodDetails({ method, amount, bookingRef }: { method: PaymentMethodOption; amount: number; bookingRef: string }) {
+function MethodDetails({ method, amount, bookingRef }: { method: GuestPaymentMethod; amount: number; bookingRef: string }) {
   const [copied, setCopied] = useState(false)
 
   async function copy() {
@@ -427,11 +379,11 @@ function MethodDetails({ method, amount, bookingRef }: { method: PaymentMethodOp
           <p className="mt-3 text-sm whitespace-pre-line text-brand-charcoal">{method.instructions}</p>
         ) : null}
       </div>
-      {method.qrPath ? (
+      {method.qrImagePath ? (
         <div className="w-full max-w-48 shrink-0">
           <PrivateImage
             bucket="payment-qr"
-            path={method.qrPath}
+            path={method.qrImagePath}
             alt={`${method.label} QR code`}
             save={{
               name: `picklehouse-matanao-${method.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-qr`,

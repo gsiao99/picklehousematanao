@@ -1,7 +1,7 @@
 import { getSupabase, siteUrl, type DbClient } from '@/lib/supabase/client'
 import { AppError, toAppError } from '@/lib/errors'
 import type { Enums, Tables } from '@/types/database'
-import type { ProfileInput, RegisterInput, SignInInput } from './schemas'
+import type { SignInInput } from './schemas'
 
 export type Profile = Tables<'profiles'>
 export type AppRole = Enums<'app_role'>
@@ -14,32 +14,7 @@ export interface Access {
 }
 
 const PROFILE_COLUMNS =
-  'id, full_name, display_name, phone, self_rated_level, level, avatar_path, leaderboard_opt_out, status, privacy_consent_at, created_at, updated_at'
-
-/**
- * Create an account. Only profile details go in user metadata — the database
- * ignores any role or permission sent here, and every new account is a player.
- *
- * Supabase does not reveal whether an email is already registered (to stop
- * account discovery), so the result is the same either way.
- */
-export async function signUp(input: RegisterInput, db: DbClient = getSupabase()) {
-  const { data, error } = await db.auth.signUp({
-    email: input.email,
-    password: input.password,
-    options: {
-      emailRedirectTo: siteUrl('/auth/callback'),
-      data: {
-        full_name: input.fullName,
-        phone: input.phone,
-        self_rated_level: input.selfRatedLevel,
-        privacy_consent: input.consent,
-      },
-    },
-  })
-  if (error) throw toAppError(error)
-  return { signedIn: Boolean(data.session) }
-}
+  'id, full_name, display_name, phone, self_rated_level, level, leaderboard_opt_out, status, privacy_consent_at, created_at, updated_at'
 
 export async function signIn(input: SignInInput, db: DbClient = getSupabase()) {
   const { error } = await db.auth.signInWithPassword({ email: input.email, password: input.password })
@@ -85,30 +60,12 @@ export async function fetchMyAccess(db: DbClient = getSupabase()): Promise<Acces
   const { data, error } = await db.rpc('get_my_access')
   if (error) throw toAppError(error)
   const row = data?.[0]
-  if (!row) throw new AppError('not_found', 'Your player profile was not found. Contact the club for help.')
+  if (!row) throw new AppError('not_found', 'Your staff profile was not found. Contact an administrator.')
   return { roles: row.roles ?? [], permissions: row.permissions ?? [], status: row.status }
 }
 
 export async function fetchMyProfile(userId: string, db: DbClient = getSupabase()): Promise<Profile> {
   const { data, error } = await db.from('profiles').select(PROFILE_COLUMNS).eq('id', userId).single()
-  if (error) throw toAppError(error)
-  return data
-}
-
-/** Players can change only these fields; the database enforces the same list. */
-export async function updateMyProfile(userId: string, input: ProfileInput, db: DbClient = getSupabase()) {
-  const { data, error } = await db
-    .from('profiles')
-    .update({
-      full_name: input.fullName,
-      display_name: input.displayName,
-      phone: input.phone,
-      self_rated_level: input.selfRatedLevel,
-      leaderboard_opt_out: input.leaderboardOptOut,
-    })
-    .eq('id', userId)
-    .select(PROFILE_COLUMNS)
-    .single()
   if (error) throw toAppError(error)
   return data
 }

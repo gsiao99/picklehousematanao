@@ -27,7 +27,8 @@ export interface HistoryEntry {
 
 export interface StaffBookingDetail {
   booking: Booking
-  player: Pick<Tables<'profiles'>, 'id' | 'full_name' | 'display_name' | 'avatar_path' | 'phone' | 'level' | 'self_rated_level' | 'status' | 'created_at'> | null
+  /** Bookings made with an account (none since guest bookings); guests are on booking.displayName / booking.guestPhone. */
+  player: Pick<Tables<'profiles'>, 'id' | 'full_name' | 'display_name' | 'phone' | 'level' | 'self_rated_level' | 'status' | 'created_at'> | null
   email: string | null
   eventTitle: string | null
   payments: StaffPayment[]
@@ -45,12 +46,13 @@ function describe(row: Pick<Tables<'audit_log'>, 'action' | 'table_name' | 'old_
   const o = (row.old_data ?? {}) as Record<string, unknown>
   const n = (row.new_data ?? {}) as Record<string, unknown>
   if (row.table_name === 'bookings') {
-    if (row.action === 'insert') return 'Booking started (cart)'
+    if (row.action === 'insert') return o.status === undefined && n.player_id == null ? 'Booked online by the guest' : 'Booking started'
     if (row.action === 'delete') return 'Booking deleted'
     const parts: string[] = []
     if (o.status !== n.status) parts.push(`Status ${words(o.status)} → ${words(n.status)}`)
     if (o.payment_status !== n.payment_status) parts.push(`Payment ${words(o.payment_status)} → ${words(n.payment_status)}`)
-    if (o.display_name !== n.display_name) parts.push(n.display_name ? `Court board name set to “${String(n.display_name)}”` : 'Court board name cleared')
+    if (o.display_name !== n.display_name) parts.push(n.display_name ? `Name set to “${String(n.display_name)}”` : 'Name cleared')
+    if (o.display_name_hidden !== n.display_name_hidden) parts.push(n.display_name_hidden ? 'Name hidden from public views' : 'Name shown again')
     return parts.length ? parts.join(' · ') : null
   }
   if (row.table_name === 'payments') {
@@ -71,7 +73,9 @@ export async function loadStaffBookingDetail(bookingId: string): Promise<StaffBo
   const booking = await getBooking(bookingId)
 
   const [profileRes, extraRes, paymentsRes, checkInsRes, methodsRes] = await Promise.all([
-    db.from('profiles').select('id, full_name, display_name, avatar_path, phone, level, self_rated_level, status, created_at').eq('id', booking.playerId).maybeSingle(),
+    booking.playerId
+      ? db.from('profiles').select('id, full_name, display_name, phone, level, self_rated_level, status, created_at').eq('id', booking.playerId).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
     db.from('bookings').select('event_id').eq('id', bookingId).maybeSingle(),
     db
       .from('payments')

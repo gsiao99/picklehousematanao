@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ChevronDown, LogOut } from 'lucide-react'
-import { playerRoutes, routes } from '@/config/navigation'
+import { routes } from '@/config/navigation'
 import { useAuth } from '@/features/auth/context'
 import { useSignOut } from '@/features/auth/useSignOut'
-import { PlayerAvatar } from '@/features/player/PlayerAvatar'
+import { Initials } from '@/components/ui/Initials'
 import { cn } from '@/lib/cn'
 
 /** Pieces shared by the player and staff area layouts. */
@@ -65,7 +65,7 @@ export function ProfileMenu({ area = 'player' }: { area?: 'player' | 'staff' }) 
         onClick={() => setOpenOn(open ? null : location.key)}
         className={cn('flex h-11 items-center gap-2 rounded-full pr-2 pl-1', area === 'player' ? 'hover:bg-white/10' : 'hover:bg-brand-green-50')}
       >
-        <PlayerAvatar profile={auth.profile} size="sm" />
+        <Initials name={auth.profile?.display_name || auth.profile?.full_name} size="sm" />
         <span className="hidden max-w-40 truncate font-semibold md:inline">{name}</span>
         <ChevronDown className={cn('size-4', area === 'player' ? 'text-white/70' : 'text-brand-charcoal-500')} aria-hidden="true" />
       </button>
@@ -74,16 +74,6 @@ export function ProfileMenu({ area = 'player' }: { area?: 'player' | 'staff' }) 
           <p className="truncate px-3 pt-2 font-semibold">{name}</p>
           <p className="truncate px-3 pb-2 text-sm text-brand-charcoal-500">{auth.user?.email}</p>
           <div className="my-1 border-t border-brand-green-100" />
-          {auth.hasRole('player') ? (
-            <Link to={playerRoutes.profile} className="flex h-11 items-center rounded-xl px-3 hover:bg-brand-green-50">
-              My profile
-            </Link>
-          ) : null}
-          {area === 'staff' && auth.hasRole('player') ? (
-            <Link to={playerRoutes.dashboard} className="flex h-11 items-center rounded-xl px-3 hover:bg-brand-green-50">
-              Player area
-            </Link>
-          ) : null}
           {area === 'player' && isStaff ? (
             <Link to={routes.admin} className="flex h-11 items-center rounded-xl px-3 hover:bg-brand-green-50">
               Staff dashboard

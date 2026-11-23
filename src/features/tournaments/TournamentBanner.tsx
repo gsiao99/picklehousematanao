@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Trophy } from 'lucide-react'
 import { buttonStyles } from '@/components/ui/buttonStyles'
-import { playerEventPath } from '@/config/navigation'
+import { publicEventPath } from '@/config/navigation'
 import { EventPoster, PosterDialog } from '@/features/events/EventPoster'
 import type { MyRegistration } from '@/features/events/api'
 import { formatDateTime } from '@/lib/time'
@@ -64,7 +64,7 @@ export function TournamentBanner({ registrations }: { registrations: MyRegistrat
           </p>
         ) : null}
         <div className="mt-2 flex flex-wrap gap-2">
-          <Link to={playerEventPath(next.slug)} className={buttonStyles({ variant: 'inverse', className: 'h-9 px-4 text-sm' })}>
+          <Link to={publicEventPath(next.slug)} className={buttonStyles({ variant: 'inverse', className: 'h-9 px-4 text-sm' })}>
             {entry ? 'View entry' : next.registrationState === 'open' ? 'Register' : 'See details'}
           </Link>
           {hasPoster ? (

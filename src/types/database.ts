@@ -97,9 +97,8 @@ export type Database = {
         Row: {
           id: string
           reference: string
-          player_id: string
+          player_id: string | null
           created_by: string | null
-          display_name: string | null
           status: Database["public"]["Enums"]["booking_status"]
           total_centavos: number
           hold_expires_at: string | null
@@ -114,15 +113,18 @@ export type Database = {
           cancel_reason: string | null
           expired_at: string | null
           payment_due_at: string | null
-          payment_reminder_sent_at: string | null
           event_id: string | null
+          display_name: string | null
+          payment_reminder_sent_at: string | null
+          guest_phone: string | null
+          manage_token_hash: string | null
+          display_name_hidden: boolean
         }
         Insert: {
           id?: string
           reference?: string
-          player_id: string
+          player_id?: string | null
           created_by?: string | null
-          display_name?: string | null
           status?: Database["public"]["Enums"]["booking_status"]
           total_centavos?: number
           hold_expires_at?: string | null
@@ -137,15 +139,18 @@ export type Database = {
           cancel_reason?: string | null
           expired_at?: string | null
           payment_due_at?: string | null
-          payment_reminder_sent_at?: string | null
           event_id?: string | null
+          display_name?: string | null
+          payment_reminder_sent_at?: string | null
+          guest_phone?: string | null
+          manage_token_hash?: string | null
+          display_name_hidden?: boolean
         }
         Update: {
           id?: string
           reference?: string
-          player_id?: string
+          player_id?: string | null
           created_by?: string | null
-          display_name?: string | null
           status?: Database["public"]["Enums"]["booking_status"]
           total_centavos?: number
           hold_expires_at?: string | null
@@ -160,15 +165,19 @@ export type Database = {
           cancel_reason?: string | null
           expired_at?: string | null
           payment_due_at?: string | null
-          payment_reminder_sent_at?: string | null
           event_id?: string | null
+          display_name?: string | null
+          payment_reminder_sent_at?: string | null
+          guest_phone?: string | null
+          manage_token_hash?: string | null
+          display_name_hidden?: boolean
         }
         Relationships: []
       }
       check_ins: {
         Row: {
           id: string
-          player_id: string
+          player_id: string | null
           event_id: string | null
           registration_id: string | null
           booking_id: string | null
@@ -178,7 +187,7 @@ export type Database = {
         }
         Insert: {
           id?: string
-          player_id: string
+          player_id?: string | null
           event_id?: string | null
           registration_id?: string | null
           booking_id?: string | null
@@ -188,7 +197,7 @@ export type Database = {
         }
         Update: {
           id?: string
-          player_id?: string
+          player_id?: string | null
           event_id?: string | null
           registration_id?: string | null
           booking_id?: string | null
@@ -612,123 +621,6 @@ export type Database = {
         }
         Relationships: []
       }
-      inventory_categories: {
-        Row: {
-          id: string
-          name: string
-          kind: string
-          sort_order: number
-          is_active: boolean
-          show_on_menu: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          name?: string
-          kind?: string
-          sort_order?: number
-          is_active?: boolean
-          show_on_menu?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          kind?: string
-          sort_order?: number
-          is_active?: boolean
-          show_on_menu?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      inventory_items: {
-        Row: {
-          id: string
-          category_id: string
-          name: string
-          unit: string | null
-          description: string | null
-          price_centavos: number
-          stock: number
-          low_stock_at: number | null
-          sort_order: number
-          is_active: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          category_id?: string
-          name?: string
-          unit?: string | null
-          description?: string | null
-          price_centavos?: number
-          stock?: number
-          low_stock_at?: number | null
-          sort_order?: number
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          category_id?: string
-          name?: string
-          unit?: string | null
-          description?: string | null
-          price_centavos?: number
-          stock?: number
-          low_stock_at?: number | null
-          sort_order?: number
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      inventory_movements: {
-        Row: {
-          id: string
-          item_id: string
-          kind: string
-          change: number
-          stock_after: number
-          reason: string | null
-          sale_id: string | null
-          actor_id: string | null
-          operating_date: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          item_id?: string
-          kind?: string
-          change?: number
-          stock_after?: number
-          reason?: string | null
-          sale_id?: string | null
-          actor_id?: string | null
-          operating_date?: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          item_id?: string
-          kind?: string
-          change?: number
-          stock_after?: number
-          reason?: string | null
-          sale_id?: string | null
-          actor_id?: string | null
-          operating_date?: string
-          created_at?: string
-        }
-        Relationships: []
-      }
       notifications: {
         Row: {
           id: string
@@ -926,7 +818,6 @@ export type Database = {
           phone: string | null
           self_rated_level: Database["public"]["Enums"]["player_level"] | null
           level: Database["public"]["Enums"]["player_level"] | null
-          avatar_path: string | null
           leaderboard_opt_out: boolean
           status: Database["public"]["Enums"]["account_status"]
           privacy_consent_at: string | null
@@ -940,7 +831,6 @@ export type Database = {
           phone?: string | null
           self_rated_level?: Database["public"]["Enums"]["player_level"] | null
           level?: Database["public"]["Enums"]["player_level"] | null
-          avatar_path?: string | null
           leaderboard_opt_out?: boolean
           status?: Database["public"]["Enums"]["account_status"]
           privacy_consent_at?: string | null
@@ -954,7 +844,6 @@ export type Database = {
           phone?: string | null
           self_rated_level?: Database["public"]["Enums"]["player_level"] | null
           level?: Database["public"]["Enums"]["player_level"] | null
-          avatar_path?: string | null
           leaderboard_opt_out?: boolean
           status?: Database["public"]["Enums"]["account_status"]
           privacy_consent_at?: string | null
@@ -1081,7 +970,7 @@ export type Database = {
           starts_at: string
           ends_at: string
           price_centavos: number
-          unit: string
+          unit: string | null
           is_active: boolean
           valid_from: string | null
           valid_to: string | null
@@ -1099,7 +988,7 @@ export type Database = {
           starts_at: string
           ends_at: string
           price_centavos: number
-          unit: string
+          unit?: string | null
           is_active?: boolean
           valid_from?: string | null
           valid_to?: string | null
@@ -1117,7 +1006,7 @@ export type Database = {
           starts_at?: string
           ends_at?: string
           price_centavos?: number
-          unit?: string
+          unit?: string | null
           is_active?: boolean
           valid_from?: string | null
           valid_to?: string | null
@@ -1125,135 +1014,6 @@ export type Database = {
           updated_at?: string
           tier?: string
           priority?: number
-        }
-        Relationships: []
-      }
-      rentals: {
-        Row: {
-          id: string
-          sale_line_id: string
-          item_id: string
-          quantity: number
-          renter_name: string
-          out_at: string
-          returned_at: string | null
-          returned_by: string | null
-          cancelled: boolean
-          due_at: string
-        }
-        Insert: {
-          id?: string
-          sale_line_id?: string
-          item_id?: string
-          quantity?: number
-          renter_name?: string
-          out_at?: string
-          returned_at?: string | null
-          returned_by?: string | null
-          cancelled?: boolean
-          due_at?: string
-        }
-        Update: {
-          id?: string
-          sale_line_id?: string
-          item_id?: string
-          quantity?: number
-          renter_name?: string
-          out_at?: string
-          returned_at?: string | null
-          returned_by?: string | null
-          cancelled?: boolean
-          due_at?: string
-        }
-        Relationships: []
-      }
-      sale_lines: {
-        Row: {
-          id: string
-          sale_id: string
-          item_id: string
-          item_name: string
-          is_rental: boolean
-          quantity: number
-          unit_price_centavos: number
-          line_total_centavos: number
-          hours: number | null
-          extends_rental_id: string | null
-          units: number
-        }
-        Insert: {
-          id?: string
-          sale_id?: string
-          item_id?: string
-          item_name?: string
-          is_rental?: boolean
-          quantity?: number
-          unit_price_centavos?: number
-          line_total_centavos?: number
-          hours?: number | null
-          extends_rental_id?: string | null
-          units?: number
-        }
-        Update: {
-          id?: string
-          sale_id?: string
-          item_id?: string
-          item_name?: string
-          is_rental?: boolean
-          quantity?: number
-          unit_price_centavos?: number
-          line_total_centavos?: number
-          hours?: number | null
-          extends_rental_id?: string | null
-          units?: number
-        }
-        Relationships: []
-      }
-      sales: {
-        Row: {
-          id: string
-          reference: string
-          operating_date: string
-          method: Database["public"]["Enums"]["payment_method_kind"]
-          customer_name: string | null
-          booking_id: string | null
-          total_centavos: number
-          staff_id: string | null
-          voided_at: string | null
-          voided_by: string | null
-          void_reason: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          reference?: string
-          operating_date?: string
-          method?: Database["public"]["Enums"]["payment_method_kind"]
-          customer_name?: string | null
-          booking_id?: string | null
-          total_centavos?: number
-          staff_id?: string | null
-          voided_at?: string | null
-          voided_by?: string | null
-          void_reason?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          reference?: string
-          operating_date?: string
-          method?: Database["public"]["Enums"]["payment_method_kind"]
-          customer_name?: string | null
-          booking_id?: string | null
-          total_centavos?: number
-          staff_id?: string | null
-          voided_at?: string | null
-          voided_by?: string | null
-          void_reason?: string | null
-          created_at?: string
-          updated_at?: string
         }
         Relationships: []
       }
@@ -1339,8 +1099,10 @@ export type Database = {
           max_slots_per_booking: number
           player_cancel_cutoff_hours: number | null
           payment_due_hours: number | null
-          payment_due_minutes: number | null
           same_day_payment_minutes: number | null
+          payment_due_minutes: number | null
+          guest_cancel_cutoff_minutes: number
+          guest_bookings_per_hour: number
         }
         Insert: {
           id?: boolean
@@ -1363,8 +1125,10 @@ export type Database = {
           max_slots_per_booking?: number
           player_cancel_cutoff_hours?: number | null
           payment_due_hours?: number | null
-          payment_due_minutes?: number | null
           same_day_payment_minutes?: number | null
+          payment_due_minutes?: number | null
+          guest_cancel_cutoff_minutes?: number
+          guest_bookings_per_hour?: number
         }
         Update: {
           id?: boolean
@@ -1387,8 +1151,10 @@ export type Database = {
           max_slots_per_booking?: number
           player_cancel_cutoff_hours?: number | null
           payment_due_hours?: number | null
-          payment_due_minutes?: number | null
           same_day_payment_minutes?: number | null
+          payment_due_minutes?: number | null
+          guest_cancel_cutoff_minutes?: number
+          guest_bookings_per_hour?: number
         }
         Relationships: []
       }
@@ -1397,108 +1163,9 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      staff_list_inventory: {
-        Args: Record<PropertyKey, never>
-        Returns: { item_id: string; category_id: string; category_name: string; category_kind: string; category_sort: number; category_active: boolean; name: string; unit: string | null; description: string | null; price_centavos: number; cost_centavos: number | null; stock: number; units_out: number; available: number; low_stock_at: number | null; is_low: boolean; sort_order: number; is_active: boolean }[]
-      }
-      staff_record_sale: {
-        Args: { _lines: Json; _method: Database["public"]["Enums"]["payment_method_kind"]; _customer_name?: string | null; _booking_reference?: string | null }
+      admin_add_walk_in: {
+        Args: { _event_id: string; _division_id: string | null; _name: string; _phone?: string; _partner_id?: string; _partner_name?: string; _paid_centavos?: number; _method?: Database["public"]["Enums"]["payment_method_kind"]; _reference?: string; _pay_later?: boolean }
         Returns: string
-      }
-      staff_extend_rental: {
-        Args: { _rental_id: string; _hours: number; _method: Database["public"]["Enums"]["payment_method_kind"] }
-        Returns: string
-      }
-      staff_return_rental: {
-        Args: { _rental_id: string }
-        Returns: undefined
-      }
-      staff_stock_move: {
-        Args: { _item_id: string; _direction: string; _quantity: number; _reason: string }
-        Returns: number
-      }
-      admin_save_inventory_category: {
-        Args: { _id: string | null; _name: string; _kind: string; _sort_order: number; _is_active: boolean; _reason: string }
-        Returns: string
-      }
-      admin_save_inventory_item: {
-        Args: { _id: string | null; _category_id: string; _name: string; _unit: string | null; _description: string | null; _price_centavos: number; _cost_centavos: number | null; _low_stock_at: number | null; _sort_order: number; _is_active: boolean; _reason: string }
-        Returns: string
-      }
-      admin_set_category_on_menu: {
-        Args: { _id: string; _show: boolean; _reason: string }
-        Returns: undefined
-      }
-      get_cafe_menu: {
-        Args: Record<PropertyKey, never>
-        Returns: { category_id: string; category_name: string; category_sort: number; item_id: string; item_name: string; price_centavos: number }[]
-      }
-      get_gallery: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          id: string; album: string; storage_path: string; caption: string | null; width: number | null; height: number | null; sort_order: number
-          event_id: string | null; event_title: string | null; event_starts_at: string | null; event_divisions: string[] | null; event_has_poster: boolean
-        }[]
-      }
-      staff_list_gallery: {
-        Args: Record<PropertyKey, never>
-        Returns: { id: string; album: string; storage_path: string; caption: string | null; width: number | null; height: number | null; sort_order: number; created_at: string; event_id: string | null; event_title: string | null }[]
-      }
-      staff_reorder_gallery_album: {
-        Args: { _album: string; _ids: string[] }
-        Returns: undefined
-      }
-      staff_link_gallery_album: {
-        Args: { _album: string; _event_id: string | null }
-        Returns: undefined
-      }
-      staff_add_gallery_photo: {
-        Args: { _id: string; _album: string; _caption?: string; _width?: number; _height?: number }
-        Returns: string
-      }
-      staff_set_gallery_caption: {
-        Args: { _id: string; _caption: string }
-        Returns: undefined
-      }
-      staff_move_gallery_photo: {
-        Args: { _id: string; _direction: number }
-        Returns: undefined
-      }
-      staff_delete_gallery_photo: {
-        Args: { _id: string }
-        Returns: string
-      }
-      staff_rename_gallery_album: {
-        Args: { _album: string; _new_name: string }
-        Returns: undefined
-      }
-      admin_delete_inventory_category: {
-        Args: { _id: string; _reason: string }
-        Returns: undefined
-      }
-      admin_delete_inventory_item: {
-        Args: { _id: string; _reason: string }
-        Returns: undefined
-      }
-      admin_set_stock: {
-        Args: { _item_id: string; _count: number; _reason: string }
-        Returns: undefined
-      }
-      admin_void_sale: {
-        Args: { _sale_id: string; _reason: string }
-        Returns: undefined
-      }
-      staff_sales_day: {
-        Args: { _date: string }
-        Returns: Json
-      }
-      report_sales_daily: {
-        Args: { _from: string; _to: string }
-        Returns: { day: string; sales: number; total_centavos: number; cash_centavos: number; online_centavos: number; rentals_centavos: number; items_centavos: number; cost_centavos: number | null; profit_centavos: number | null; voided: number }[]
-      }
-      report_sales_items: {
-        Args: { _from: string; _to: string }
-        Returns: { category: string; item: string; rental: boolean; quantity: number; total_centavos: number; cost_centavos: number | null; profit_centavos: number | null }[]
       }
       admin_grant_role: {
         Args: { _user_id: string; _role: Database["public"]["Enums"]["app_role"]; _reason: string }
@@ -1523,10 +1190,6 @@ export type Database = {
       cancel_booking: {
         Args: { _booking_id: string; _reason?: string }
         Returns: undefined
-      }
-      confirm_booking: {
-        Args: { _booking_id: string }
-        Returns: { status: string; booking_id: string; reference: string; total_centavos: number }[]
       }
       get_attendance_leaderboard: {
         Args: { _days?: number; _limit?: number }
@@ -1564,10 +1227,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: { match_id: string; event_title: string; event_slug: string; division_name: string; played_on: string; opponent: string; won: boolean; walkover: boolean; score: string; points: number }[]
       }
-      get_my_payments: {
-        Args: Record<PropertyKey, never>
-        Returns: { payment_id: string; status: Database["public"]["Enums"]["payment_status"]; method_kind: Database["public"]["Enums"]["payment_method_kind"]; amount_centavos: number; reference_no: string; submitted_at: string; reviewed_at: string; review_note: string; booking_id: string; booking_reference: string; booking_payment_status: Database["public"]["Enums"]["booking_payment_status"]; purpose: string }[]
-      }
       get_my_play_history: {
         Args: { _limit?: number }
         Returns: { check_in_id: string; checked_in_at: string; kind: string; event_type: Database["public"]["Enums"]["event_type"]; title: string; detail: string; event_slug: string; booking_id: string; booking_reference: string }[]
@@ -1580,21 +1239,41 @@ export type Database = {
         Args: { _date: string }
         Returns: { operating_date: string; state: string; opens_at: string; closes_at: string; note: string; bookable: boolean; first_bookable_date: string; last_bookable_date: string }[]
       }
-      get_payment_instructions: {
-        Args: { _booking_id: string }
-        Returns: { payment_method_id: string; kind: Database["public"]["Enums"]["payment_method_kind"]; label: string; account_name: string; account_number: string; bank_name: string; qr_image_path: string; instructions: string; amount_due_centavos: number; booking_reference: string; payment_due_at: string }[]
-      }
       get_queue: {
         Args: { _event_id: string }
         Returns: { entry_id: string; player_name: string; status: string; queue_position: number; queued_at: string; game_id: string; game_status: string; court_id: string; court_name: string; team: string; consecutive_games: number; games_played: number; stays_on_court: boolean; is_me: boolean; division_id: string; division_name: string; wins: number }[]
+      }
+      get_session_board: {
+        Args: { _event_id: string; _code: string }
+        Returns: Json
+      }
+      get_session_standings: {
+        Args: { _event_id: string }
+        Returns: { rank: number; player_name: string; games: number; wins: number; losses: number; is_me: boolean }[]
       }
       get_whos_playing: {
         Args: { _event_id: string }
         Returns: { registration_id: string; division_id: string; division_name: string; category_name: string; team_size: number; player_name: string; partner_name: string; status: Database["public"]["Enums"]["registration_status"]; checked_in: boolean; is_me: boolean }[]
       }
-      hold_slots: {
-        Args: { _slots: Json }
-        Returns: string
+      guest_begin_receipt_upload: {
+        Args: { _reference: string; _token: string; _extension: string }
+        Returns: Json
+      }
+      guest_cancel_booking: {
+        Args: { _reference: string; _token: string; _reason?: string }
+        Returns: Json
+      }
+      guest_create_booking: {
+        Args: { _slots: Json; _display_name: string; _phone: string }
+        Returns: { reference: string; token: string; total_centavos: number; payment_due_at: string }[]
+      }
+      guest_get_booking: {
+        Args: { _reference: string; _token: string }
+        Returns: Json
+      }
+      guest_submit_payment: {
+        Args: { _reference: string; _token: string; _payment_method_id: string; _proof_path: string; _reference_no?: string; _proof_sha256?: string; _amount_centavos?: number }
+        Returns: Json
       }
       join_queue: {
         Args: { _event_id: string }
@@ -1611,10 +1290,6 @@ export type Database = {
       register_for_event: {
         Args: { _event_id: string; _division_id?: string; _partner_email?: string; _note?: string }
         Returns: { registration_id: string; status: Database["public"]["Enums"]["registration_status"]; booking_id: string; amount_due_centavos: number }[]
-      }
-      release_held_slot: {
-        Args: { _slot_id: string }
-        Returns: undefined
       }
       report_bookings: {
         Args: { _from: string; _to: string }
@@ -1636,8 +1311,8 @@ export type Database = {
         Args: { _from: string; _to: string }
         Returns: { day: string; payments_approved: number; court_rental_centavos: number; event_fee_centavos: number; cash_centavos: number; online_centavos: number; total_centavos: number; refunded_or_due_centavos: number }[]
       }
-      set_booking_display_name: {
-        Args: { _booking_id: string; _name: string }
+      self_check_in: {
+        Args: { _event_id: string; _code: string }
         Returns: string
       }
       staff_assign_event_courts: {
@@ -1648,13 +1323,17 @@ export type Database = {
         Args: { _court_ids: string[]; _starts_at: string; _ends_at: string; _kind: Database["public"]["Enums"]["slot_kind"]; _note: string; _reason: string }
         Returns: string[]
       }
+      staff_booking_balances: {
+        Args: { _booking_ids: string[] }
+        Returns: { booking_id: string; total_centavos: number; paid_centavos: number; due_centavos: number }[]
+      }
+      staff_booking_history: {
+        Args: { _booking_id: string }
+        Returns: { id: number; occurred_at: string; actor_id: string | null; action: string; table_name: string; old_data: Json; new_data: Json; reason: string | null }[]
+      }
       staff_call_next: {
         Args: { _event_id: string; _court_id: string }
         Returns: string
-      }
-      staff_set_court_lane: {
-        Args: { _event_id: string; _court_id: string; _division_id: string | null }
-        Returns: undefined
       }
       staff_cancel_event: {
         Args: { _event_id: string; _reason: string }
@@ -1672,16 +1351,12 @@ export type Database = {
         Args: { _registration_id: string }
         Returns: undefined
       }
+      staff_check_in_all: {
+        Args: { _event_id: string }
+        Returns: number
+      }
       staff_check_in_booking: {
         Args: { _booking_id: string }
-        Returns: undefined
-      }
-      staff_delete_booking: {
-        Args: { _booking_id: string; _reason: string }
-        Returns: undefined
-      }
-      staff_delete_event: {
-        Args: { _event_id: string; _reason: string }
         Returns: undefined
       }
       staff_complete_game: {
@@ -1691,6 +1366,18 @@ export type Database = {
       staff_dashboard: {
         Args: Record<PropertyKey, never>
         Returns: { operating_date: string; bookings_today: number; court_hours_today: number; unpaid_today: number; pending_payments: number; oldest_pending_at: string; refunds_due: number; active_holds: number; courts_total: number; courts_in_use: number; courts_maintenance: number; hours_configured: boolean; rates_configured: boolean; payment_methods_active: number; payment_due_hours: number }[]
+      }
+      staff_delete_booking: {
+        Args: { _booking_id: string; _reason: string }
+        Returns: undefined
+      }
+      staff_delete_event: {
+        Args: { _event_id: string; _reason: string }
+        Returns: undefined
+      }
+      staff_event_codes: {
+        Args: { _event_id: string }
+        Returns: { checkin_code: string; board_code: string }[]
       }
       staff_find_players: {
         Args: { _query: string }
@@ -1704,22 +1391,6 @@ export type Database = {
         Args: { _date: string }
         Returns: { slot_id: string; court_id: string; court_name: string; starts_at: string; ends_at: string; kind: Database["public"]["Enums"]["slot_kind"]; slot_status: Database["public"]["Enums"]["slot_status"]; booking_id: string; booking_reference: string; booking_status: Database["public"]["Enums"]["booking_status"]; payment_status: Database["public"]["Enums"]["booking_payment_status"]; player_name: string; player_phone: string; note: string; event_title: string; display_name: string }[]
       }
-      staff_booking_balances: {
-        Args: { _booking_ids: string[] }
-        Returns: { booking_id: string; total_centavos: number; paid_centavos: number; due_centavos: number }[]
-      }
-      staff_booking_history: {
-        Args: { _booking_id: string }
-        Returns: { id: number; occurred_at: string; actor_id: string | null; action: string; table_name: string; old_data: Json; new_data: Json; reason: string | null }[]
-      }
-      staff_money_summary: {
-        Args: { _date?: string }
-        Returns: { kind: string; method: Database["public"]["Enums"]["payment_method_kind"]; items: number; centavos: number }[]
-      }
-      staff_search_payments: {
-        Args: { _query?: string; _status?: Database["public"]["Enums"]["payment_status"]; _from?: string; _to?: string; _limit?: number }
-        Returns: { payment_id: string; status: Database["public"]["Enums"]["payment_status"]; method_kind: Database["public"]["Enums"]["payment_method_kind"]; method_label: string; amount_centavos: number; declared_centavos: number | null; reference_no: string | null; proof_path: string | null; submitted_at: string; reviewed_at: string | null; reviewer_name: string | null; review_note: string | null; booking_id: string; booking_reference: string; booking_status: Database["public"]["Enums"]["booking_status"]; booking_payment_status: Database["public"]["Enums"]["booking_payment_status"]; booking_total_centavos: number; booking_due_centavos: number; first_slot_at: string | null; player_name: string; player_phone: string | null; is_own: boolean }[]
-      }
       staff_list_payments: {
         Args: { _status?: Database["public"]["Enums"]["payment_status"]; _limit?: number }
         Returns: { payment_id: string; status: Database["public"]["Enums"]["payment_status"]; method_kind: Database["public"]["Enums"]["payment_method_kind"]; method_label: string; amount_centavos: number; reference_no: string; proof_path: string; submitted_at: string; reviewed_at: string; reviewer_name: string; review_note: string; booking_id: string; booking_reference: string; booking_status: Database["public"]["Enums"]["booking_status"]; booking_total_centavos: number; first_slot_at: string; player_name: string; player_phone: string; is_own: boolean }[]
@@ -1728,33 +1399,13 @@ export type Database = {
         Args: { _event_id: string }
         Returns: { registration_id: string; division_id: string; division_name: string; category_name: string; player_id: string; player_name: string; player_phone: string; player_level: Database["public"]["Enums"]["player_level"]; partner_id: string; partner_name: string; status: Database["public"]["Enums"]["registration_status"]; attendance: string; checked_in_at: string; booking_id: string; booking_reference: string; payment_status: Database["public"]["Enums"]["booking_payment_status"]; fee_centavos: number; seed: number; created_at: string; cancel_reason: string; is_walk_in: boolean; walk_in_paid_centavos: number | null; walk_in_method: Database["public"]["Enums"]["payment_method_kind"] | null; walk_in_reference: string | null; walk_in_fee_due_centavos: number | null }[]
       }
-      staff_mark_walk_in_paid: {
-        Args: { _registration_id: string; _received_centavos: number; _method: Database["public"]["Enums"]["payment_method_kind"]; _reference?: string }
-        Returns: undefined
-      }
-      staff_check_in_all: {
-        Args: { _event_id: string }
-        Returns: number
-      }
-      staff_start_session: {
-        Args: { _event_id: string }
-        Returns: number
-      }
-      get_session_standings: {
-        Args: { _event_id: string }
-        Returns: { rank: number; player_name: string; games: number; wins: number; losses: number; is_me: boolean }[]
-      }
-      staff_queue_add_walk_in: {
-        Args: { _registration_id: string }
-        Returns: string
-      }
-      admin_add_walk_in: {
-        Args: { _event_id: string; _division_id: string | null; _name: string; _phone?: string; _partner_id?: string; _partner_name?: string; _paid_centavos?: number; _method?: Database["public"]["Enums"]["payment_method_kind"]; _reference?: string; _pay_later?: boolean }
-        Returns: string
-      }
       staff_lookup_players: {
         Args: { _query: string; _limit?: number }
         Returns: { player_id: string; full_name: string; phone: string; email: string; level: Database["public"]["Enums"]["player_level"]; self_rated_level: Database["public"]["Enums"]["player_level"]; status: Database["public"]["Enums"]["account_status"]; bookings_total: number; bookings_upcoming: number; unpaid_bookings: number; last_booking_at: string; member_since: string }[]
+      }
+      staff_mark_absent: {
+        Args: { _registration_id: string }
+        Returns: undefined
       }
       staff_mark_booking_paid: {
         Args: { _booking_id: string; _note?: string; _received_centavos?: number }
@@ -1764,12 +1415,20 @@ export type Database = {
         Args: { _booking_id: string; _reason: string }
         Returns: undefined
       }
-      staff_mark_absent: {
-        Args: { _registration_id: string }
+      staff_mark_walk_in_paid: {
+        Args: { _registration_id: string; _received_centavos: number; _method: Database["public"]["Enums"]["payment_method_kind"]; _reference?: string }
         Returns: undefined
+      }
+      staff_money_summary: {
+        Args: { _date?: string }
+        Returns: { kind: string; method: Database["public"]["Enums"]["payment_method_kind"]; items: number; centavos: number }[]
       }
       staff_queue_add: {
         Args: { _event_id: string; _player_id: string }
+        Returns: string
+      }
+      staff_queue_add_walk_in: {
+        Args: { _registration_id: string }
         Returns: string
       }
       staff_queue_no_show: {
@@ -1816,17 +1475,17 @@ export type Database = {
         Args: { _query?: string; _from?: string; _to?: string; _status?: Database["public"]["Enums"]["booking_status"]; _payment_status?: Database["public"]["Enums"]["booking_payment_status"]; _limit?: number }
         Returns: { booking_id: string; reference: string; status: Database["public"]["Enums"]["booking_status"]; payment_status: Database["public"]["Enums"]["booking_payment_status"]; total_centavos: number; player_id: string; player_name: string; player_phone: string; first_slot_at: string; operating_date: string; slot_count: number; courts: string; created_at: string }[]
       }
-      staff_event_codes: {
-        Args: { _event_id: string }
-        Returns: { checkin_code: string; board_code: string }[]
+      staff_search_payments: {
+        Args: { _query?: string; _status?: Database["public"]["Enums"]["payment_status"]; _from?: string; _to?: string; _limit?: number }
+        Returns: { payment_id: string; status: Database["public"]["Enums"]["payment_status"]; method_kind: Database["public"]["Enums"]["payment_method_kind"]; method_label: string; amount_centavos: number; declared_centavos: number | null; reference_no: string | null; proof_path: string | null; submitted_at: string; reviewed_at: string | null; reviewer_name: string | null; review_note: string | null; booking_id: string; booking_reference: string; booking_status: Database["public"]["Enums"]["booking_status"]; booking_payment_status: Database["public"]["Enums"]["booking_payment_status"]; booking_total_centavos: number; booking_due_centavos: number; first_slot_at: string | null; player_name: string; player_phone: string | null; is_own: boolean }[]
       }
-      self_check_in: {
-        Args: { _event_id: string; _code: string }
-        Returns: string
+      staff_set_booking_display_name: {
+        Args: { _booking_id: string; _name: string; _hidden: boolean; _reason: string }
+        Returns: undefined
       }
-      get_session_board: {
-        Args: { _event_id: string; _code: string }
-        Returns: Json
+      staff_set_court_lane: {
+        Args: { _event_id: string; _court_id: string; _division_id: string | null }
+        Returns: undefined
       }
       staff_set_player_level: {
         Args: { _user_id: string; _level: Database["public"]["Enums"]["player_level"]; _reason: string }
@@ -1836,9 +1495,9 @@ export type Database = {
         Args: { _game_id: string }
         Returns: undefined
       }
-      submit_payment: {
-        Args: { _booking_id: string; _payment_method_id: string; _proof_path: string; _reference_no?: string; _proof_sha256?: string; _amount_centavos?: number }
-        Returns: string
+      staff_start_session: {
+        Args: { _event_id: string }
+        Returns: number
       }
       withdraw_registration: {
         Args: { _registration_id: string; _reason?: string }

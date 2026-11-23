@@ -59,9 +59,11 @@ export interface BookingSlot {
   operatingDate: string
 }
 
+/** A booking as staff see it (guests use the manage link: features/guest). */
 export interface Booking {
   id: string
-  playerId: string
+  /** Set only for bookings made with an account (none since guest bookings). */
+  playerId: string | null
   reference: string
   status: BookingStatus
   paymentStatus: PaymentStatus
@@ -73,8 +75,12 @@ export interface Booking {
   confirmedAt: string | null
   cancelledAt: string | null
   cancelReason: string | null
-  /** Optional public name for the court board, chosen by the player. */
+  /** Public name on the court board (the guest's display name). */
   displayName: string | null
+  /** Staff hid the name from public views. */
+  displayNameHidden: boolean
+  /** The guest's mobile number (staff only). */
+  guestPhone: string | null
   slots: BookingSlot[]
 }
 
@@ -157,39 +163,21 @@ export async function getLiveCourts(): Promise<LiveCourt[]> {
   }))
 }
 
-/** Hold times in the player's cart. All or nothing; the server checks everything again. */
-export async function holdSlots(slots: SlotRequest[]): Promise<string> {
-  const payload = slots.map((s) => ({ court_id: s.courtId, starts_at: s.startsAt }))
-  const { data, error } = await db().rpc('hold_slots', { _slots: payload })
-  if (error) throw toAppError(error)
-  return data
-}
-
-export async function releaseHeldSlot(slotId: string): Promise<void> {
-  const { error } = await db().rpc('release_held_slot', { _slot_id: slotId })
+/** Staff: cancel a booking (a reason is required). Guests cancel through their manage link. */
+export async function cancelBooking(bookingId: string, reason: string): Promise<void> {
+  const { error } = await db().rpc('cancel_booking', { _booking_id: bookingId, _reason: reason })
   if (error) throw toAppError(error)
 }
 
-export async function confirmBooking(
-  bookingId: string,
-): Promise<{ status: 'confirmed' | 'expired'; reference: string; totalCentavos: number }> {
-  const { data, error } = await db().rpc('confirm_booking', { _booking_id: bookingId })
+/** Staff: change the public name on a booking, or hide it from the court board and live view. */
+export async function staffSetBookingDisplayName(bookingId: string, name: string, hidden: boolean, reason: string): Promise<void> {
+  const { error } = await db().rpc('staff_set_booking_display_name', {
+    _booking_id: bookingId,
+    _name: name,
+    _hidden: hidden,
+    _reason: reason,
+  })
   if (error) throw toAppError(error)
-  const row = data?.[0]
-  if (!row) throw new AppError('unknown', 'The booking could not be confirmed. Try again.')
-  return { status: row.status as 'confirmed' | 'expired', reference: row.reference, totalCentavos: row.total_centavos }
-}
-
-export async function cancelBooking(bookingId: string, reason?: string): Promise<void> {
-  const { error } = await db().rpc('cancel_booking', { _booking_id: bookingId, _reason: reason ?? '' })
-  if (error) throw toAppError(error)
-}
-
-/** Set (or clear, with an empty string) the name shown for this booking on Live courts. */
-export async function setBookingDisplayName(bookingId: string, name: string): Promise<string | null> {
-  const { data, error } = await db().rpc('set_booking_display_name', { _booking_id: bookingId, _name: name })
-  if (error) throw toAppError(error)
-  return data ?? null
 }
 
 /**
@@ -217,8 +205,9 @@ export async function staffDeleteBooking(bookingId: string, reason: string): Pro
   if (error) throw toAppError(error)
 }
 
+// Staff only (RLS). manage_token_hash is never selectable.
 const BOOKING_COLUMNS =
-  'id, player_id, reference, status, payment_status, total_centavos, hold_expires_at, created_at, confirmed_at, cancelled_at, cancel_reason, display_name, payment_due_at'
+  'id, player_id, reference, status, payment_status, total_centavos, hold_expires_at, created_at, confirmed_at, cancelled_at, cancel_reason, display_name, display_name_hidden, guest_phone, payment_due_at'
 const SLOT_COLUMNS = 'id, booking_id, court_id, slot, status, price_centavos, price_breakdown, operating_date'
 
 /** "[\"2026-11-06 06:00:00+00\",\"2026-11-06 07:00:00+00\")" → [start, end] ISO strings */
@@ -231,26 +220,20 @@ export function parseRange(range: string): [string, string] {
 
 type BookingRow = Database['public']['Tables']['bookings']['Row']
 
-type BookingQuery = { kind: 'cart'; userId: string } | { kind: 'history'; userId: string } | { kind: 'one'; id: string }
+type BookingRowOut = Pick<BookingRow, 'id' | 'player_id' | 'reference' | 'status' | 'payment_status' | 'total_centavos' | 'hold_expires_at' |
+  'created_at' | 'confirmed_at' | 'cancelled_at' | 'cancel_reason' | 'display_name' | 'display_name_hidden' | 'guest_phone' | 'payment_due_at'>
 
-async function fetchBookingRows(client: DbClient, q: BookingQuery): Promise<BookingRow[]> {
-  const base = client.from('bookings').select(BOOKING_COLUMNS).order('created_at', { ascending: false })
-  const query =
-    q.kind === 'cart'
-      ? base.eq('player_id', q.userId).eq('status', 'held').gt('hold_expires_at', new Date().toISOString()).limit(1)
-      : q.kind === 'history'
-        ? base.eq('player_id', q.userId).neq('status', 'held').limit(100)
-        : base.eq('id', q.id)
-  const { data, error } = await query
+async function fetchBookingRows(client: DbClient, id: string): Promise<BookingRowOut[]> {
+  const { data, error } = await client.from('bookings').select(BOOKING_COLUMNS).eq('id', id)
   if (error) throw toAppError(error)
-  return (data ?? []) as BookingRow[]
+  return (data ?? []) as BookingRowOut[]
 }
 
-async function loadBookings(q: BookingQuery): Promise<Booking[]> {
+async function loadBookings(id: string): Promise<Booking[]> {
   const client = db()
   const [{ data: courts, error: courtsError }, list] = await Promise.all([
     client.from('courts').select('id, name'),
-    fetchBookingRows(client, q),
+    fetchBookingRows(client, id),
   ])
   if (courtsError) throw toAppError(courtsError)
   if (list.length === 0) return []
@@ -270,6 +253,8 @@ async function loadBookings(q: BookingQuery): Promise<Booking[]> {
     playerId: b.player_id,
     reference: b.reference,
     displayName: b.display_name,
+    displayNameHidden: b.display_name_hidden,
+    guestPhone: b.guest_phone,
     status: b.status,
     paymentStatus: b.payment_status,
     totalCentavos: b.total_centavos,
@@ -300,32 +285,8 @@ async function loadBookings(q: BookingQuery): Promise<Booking[]> {
   }))
 }
 
-/** The player's open cart (a held booking whose hold has not run out), or null. */
-export async function getMyCart(userId: string): Promise<Booking | null> {
-  const list = await loadBookings({ kind: 'cart', userId })
-  return list[0] ?? null
-}
-
-export async function listMyBookings(userId: string): Promise<Booking[]> {
-  return loadBookings({ kind: 'history', userId })
-}
-
-/** How many hours before its first time a player may still cancel a confirmed booking; null = only the club can. */
-export async function getCancelCutoffHours(): Promise<number | null> {
-  const { data, error } = await db().from('venue_settings').select('player_cancel_cutoff_hours').limit(1).maybeSingle()
-  if (error) throw toAppError(error)
-  return data?.player_cancel_cutoff_hours ?? null
-}
-
-/** When the player was checked in for this booking (RLS: their own check-ins). */
-export async function listBookingCheckIns(bookingId: string): Promise<string[]> {
-  const { data, error } = await db().from('check_ins').select('checked_in_at').eq('booking_id', bookingId).order('checked_in_at')
-  if (error) throw toAppError(error)
-  return (data ?? []).map((c) => c.checked_in_at)
-}
-
 export async function getBooking(bookingId: string): Promise<Booking> {
-  const list = await loadBookings({ kind: 'one', id: bookingId })
+  const list = await loadBookings(bookingId)
   if (!list[0]) throw new AppError('not_found', 'That booking was not found.')
   return list[0]
 }

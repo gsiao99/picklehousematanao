@@ -1,4 +1,4 @@
-import { playerRoutes, routes } from '@/config/navigation'
+import { routes } from '@/config/navigation'
 import { toAppError } from '@/lib/errors'
 import { getSupabase } from '@/lib/supabase/client'
 
@@ -47,10 +47,8 @@ export interface BoardStack {
   next: string[]
 }
 
-export const checkInPath = (eventId: string, code: string) => `${playerRoutes.checkIn}?e=${eventId}&c=${encodeURIComponent(code)}`
-/** The TV board link; with the check-in code the board also shows the check-in QR. */
-export const boardPath = (eventId: string, code: string, checkinCode?: string) =>
-  `${routes.board}/${eventId}?k=${encodeURIComponent(code)}${checkinCode ? `&c=${encodeURIComponent(checkinCode)}` : ''}`
+/** The TV board link. (Self check-in by QR was for player accounts; guest check-in comes with Phase 2.) */
+export const boardPath = (eventId: string, code: string) => `${routes.board}/${eventId}?k=${encodeURIComponent(code)}`
 
 export async function getEventCodes(eventId: string): Promise<{ checkin_code: string; board_code: string }> {
   const { data, error } = await getSupabase().rpc('staff_event_codes', { _event_id: eventId })
@@ -58,12 +56,6 @@ export async function getEventCodes(eventId: string): Promise<{ checkin_code: st
   const row = data?.[0]
   if (!row) throw toAppError(new Error('The codes for this session could not load.'))
   return row
-}
-
-export async function selfCheckIn(eventId: string, code: string): Promise<'queued' | 'checked_in'> {
-  const { data, error } = await getSupabase().rpc('self_check_in', { _event_id: eventId, _code: code })
-  if (error) throw toAppError(error)
-  return data === 'queued' ? 'queued' : 'checked_in'
 }
 
 export async function getSessionBoard(eventId: string, code: string): Promise<SessionBoard> {

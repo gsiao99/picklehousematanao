@@ -4,7 +4,7 @@ import { Menu, X } from 'lucide-react'
 import { LogoMark } from '@/components/brand/Logo'
 import { buttonStyles } from '@/components/ui/buttonStyles'
 import { Container } from '@/components/ui/Container'
-import { playerRoutes, primaryNav, routes } from '@/config/navigation'
+import { primaryNav, routes } from '@/config/navigation'
 import { useAuth } from '@/features/auth/context'
 import { EntranceLink } from '@/features/entrance/EntranceLink'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
@@ -15,12 +15,9 @@ export function SiteHeader() {
   const location = useLocation()
   const auth = useAuth()
   const signedIn = auth.status === 'signed_in'
-  const isPlayer = signedIn && auth.hasRole('player')
-  const accountLink = signedIn
-    ? isPlayer
-      ? { to: playerRoutes.dashboard, label: 'My dashboard' }
-      : { to: routes.admin, label: 'Staff dashboard' }
-    : { to: routes.signIn, label: 'Sign in to book' }
+  const isStaffAccount = signedIn && (auth.hasRole('staff') || auth.hasRole('admin'))
+  // Guests book without an account; only staff sign in (from the footer).
+  const accountLink = isStaffAccount ? { to: routes.admin, label: 'Staff dashboard' } : { to: routes.book, label: 'Book a court' }
   // The menu belongs to the location it was opened on, so any navigation closes it.
   const [openOn, setOpenOn] = useState<string | null>(null)
   const open = openOn === location.key
@@ -35,7 +32,7 @@ export function SiteHeader() {
         { to: routes.book, label: 'Book a court' },
         { to: routes.live, label: 'Live courts' },
         { to: routes.events, label: 'Open play & events' },
-        ...(isPlayer ? [{ to: playerRoutes.bookings, label: 'My bookings' }] : []),
+        { to: routes.myBookings, label: 'My bookings' },
         ...(isStaff
           ? [
               { to: routes.admin, label: 'Dashboard' },
@@ -99,26 +96,25 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          {isBackendConfigured ? (
-            <EntranceLink
-              entrance={!isStaff}
-              to={isStaff ? routes.admin : signedIn ? routes.book : routes.register}
+          {isBackendConfigured && !isStaff ? (
+            <Link
+              to={routes.myBookings}
               className="hidden rounded-full px-3.5 py-2 text-[0.9375rem] font-medium text-white/85 hover:bg-white/10 hover:text-white md:inline-flex"
             >
-              {isStaff ? 'Staff dashboard' : signedIn ? 'Book a court' : 'Create account'}
-            </EntranceLink>
+              My bookings
+            </Link>
           ) : null}
           {signedIn && auth.user && isBackendConfigured ? <NotificationBell userId={auth.user.id} /> : null}
           <EntranceLink entrance={!isStaff} to={accountLink.to} className={buttonStyles({ variant: 'inverse', className: 'hidden sm:inline-flex' })}>
             {accountLink.label}
           </EntranceLink>
-          {/* Phones: returning players sign in without opening the menu. */}
-          {!signedIn && isBackendConfigured ? (
+          {/* Phones: booking is one tap away without opening the menu. */}
+          {isBackendConfigured && !isStaff ? (
             <EntranceLink
-              to={routes.signIn}
+              to={routes.book}
               className="inline-flex h-11 items-center rounded-full bg-white/10 px-4 text-[0.9375rem] font-semibold text-white hover:bg-white/15 sm:hidden"
             >
-              Sign in
+              Book
             </EntranceLink>
           ) : null}
           <button
@@ -151,19 +147,10 @@ export function SiteHeader() {
               entrance={!isStaff}
               to={accountLink.to}
               onClick={() => setOpen(false)}
-              className={buttonStyles({ variant: 'inverse', className: cn('w-full', (signedIn || !isBackendConfigured) && 'col-span-2') })}
+              className={buttonStyles({ variant: 'inverse', className: 'col-span-2 w-full' })}
             >
               {accountLink.label}
             </EntranceLink>
-            {!signedIn && isBackendConfigured ? (
-              <EntranceLink
-                to={routes.register}
-                onClick={() => setOpen(false)}
-                className={buttonStyles({ variant: 'outline-inverse', className: 'w-full' })}
-              >
-                Create account
-              </EntranceLink>
-            ) : null}
           </div>
           {appLinks.length > 0 ? (
             <ul className="grid grid-cols-2 gap-2">

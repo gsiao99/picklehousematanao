@@ -36,7 +36,7 @@ export function NotificationBell({ userId, onLight = false, scope = 'personal' }
 
   return (
     <Link
-      to={scope === 'team' ? `${routes.admin}#activity-title` : routes.notifications}
+      to={`${routes.admin}#activity-title`}
       aria-label={`${scope === 'team' ? 'Team alerts' : 'Notifications'}${unread > 0 ? `, ${unread} unread` : ''}`}
       className={cn(
         'relative inline-flex size-11 items-center justify-center rounded-full',

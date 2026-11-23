@@ -1,31 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { CalendarClock, CalendarX, Clock3 } from 'lucide-react'
-import { buttonStyles } from '@/components/ui/buttonStyles'
 import { Container } from '@/components/ui/Container'
 import { Alert } from '@/components/ui/form'
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/states'
-import { bookingPath, routes } from '@/config/navigation'
+import { bookingManagePath, routes } from '@/config/navigation'
 import { BackendNotice } from '@/features/auth/BackendNotice'
-import { useAuth } from '@/features/auth/context'
-import {
-  cancelBooking,
-  confirmBooking,
-  setBookingDisplayName,
-  getAvailability,
-  getMyCart,
-  getOperatingDay,
-  holdSlots,
-  releaseHeldSlot,
-  type AvailabilitySlot,
-} from '@/features/booking/api'
+import { isBackendConfigured } from '@/lib/supabase/client'
+import { getAvailability, getOperatingDay, type AvailabilitySlot } from '@/features/booking/api'
 import { CartDrawer } from '@/features/booking/CartDrawer'
-import { CartPanel } from '@/features/booking/CartPanel'
 import { DateStrip } from '@/features/booking/DateStrip'
 import { CourtCards, CourtCardsLegend } from '@/features/booking/CourtCards'
 import { slotKey } from '@/features/booking/slots'
 import { VenueView, type VenueCourt } from '@/features/booking/VenueView'
 import { useLiveQuery } from '@/features/booking/useLiveQuery'
+import { createGuestBooking } from '@/features/guest/api'
+import { saveBooking } from '@/features/guest/device'
+import { GuestCheckoutPanel, type CheckoutDetails, type SelectedSlot } from '@/features/guest/GuestCheckoutPanel'
 import { toAppError } from '@/lib/errors'
 import { formatPeso } from '@/lib/money'
 import { formatClubTimeRange, formatOperatingDate, formatTimeRange, manilaToday } from '@/lib/time'
@@ -48,68 +39,56 @@ function venueCourts(slots: AvailabilitySlot[]): VenueCourt[] {
       return {
         id,
         name: c.name,
-        status: c.inCart ? `${c.inCart} in cart` : c.prices.length ? `${c.prices.length} open` : 'None open',
+        status: c.inCart ? `${c.inCart} chosen` : c.prices.length ? `${c.prices.length} open` : 'None open',
         extra: c.prices.length ? (low === high ? formatPeso(low) : `from ${formatPeso(low)}`) : null,
         tone: c.inCart ? 'event' : c.prices.length ? 'open' : 'off',
       }
     })
 }
 
+/** The server's view of the day, with the guest's own choices shown as "in_cart". */
+function withSelection(slots: AvailabilitySlot[], chosen: Map<string, SelectedSlot>): AvailabilitySlot[] {
+  return slots.map((s) => (s.status === 'available' && chosen.has(slotKey(s)) ? { ...s, status: 'in_cart' } : s))
+}
+
 export function BookPage() {
-  const auth = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [params, setParams] = useSearchParams()
   const date = params.get('date') ?? manilaToday()
-  const userId = auth.user?.id ?? null
 
   const [busy, setBusy] = useState(false)
-  // The time being added or removed right now (shown as working, other taps wait).
-  const [pendingKey, setPendingKey] = useState<string | null>(null)
-  const [notice, setNotice] = useState<{
-    tone: 'success' | 'error' | 'info'
-    text: string
-    /** A time just removed from the cart, offered back for a few seconds. */
-    undo?: { courtId: string; startsAt: string; when: string }
-  } | null>(null)
-  const [cartError, setCartError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  // The guest's chosen times (any day), kept in this page only until they book.
+  const [chosen, setChosen] = useState<Map<string, SelectedSlot>>(() => new Map())
 
   useEffect(() => {
     document.title = 'Book a court — Picklehouse Matanao'
   }, [])
 
-  // The Undo offer lasts a few seconds; the message itself stays.
-  const undoOffer = notice?.undo
-  useEffect(() => {
-    if (!undoOffer) return
-    const timer = window.setTimeout(() => setNotice((n) => (n?.undo === undoOffer ? { ...n, undo: undefined } : n)), 8000)
-    return () => window.clearTimeout(timer)
-  }, [undoOffer])
-
   const loadDay = useCallback(async () => {
     const [day, slots] = await Promise.all([getOperatingDay(date), getAvailability(date)])
     return { day, slots }
   }, [date])
-  const { state: dayState, refresh: refreshDay } = useLiveQuery(
-    auth.status === 'unconfigured' ? null : `day:${date}:${userId ?? 'anon'}`,
-    loadDay,
-    { watchDates: [date] },
-  )
+  const { state: dayState, refresh: refreshDay } = useLiveQuery(isBackendConfigured ? `day:${date}` : null, loadDay, {
+    watchDates: [date],
+  })
 
-  const loadCart = useCallback(async () => (userId ? getMyCart(userId) : null), [userId])
-  const { state: cartState, refresh: refreshCart } = useLiveQuery(userId ? `cart:${userId}` : null, loadCart)
-  const cart = cartState.status === 'ready' ? cartState.data : null
-  // Phones and tablets get the cart as a drawer from the right instead of below the grid.
+  // Someone else booked a chosen time meanwhile: leave it out and say so.
+  const daySlots = dayState.status === 'ready' ? dayState.data.slots : null
+  const taken = (daySlots ?? []).filter((s) => s.status !== 'available' && chosen.has(slotKey(s)))
+  const takenKeys = new Set(taken.map(slotKey))
+
+  // Phones and tablets get the checkout as a drawer from the right instead of beside the grid.
   const drawer = useBelowLg()
+  const selection = [...chosen.values()].filter((s) => !takenKeys.has(slotKey(s)))
   const cartOpenInHistory = Boolean((location.state as { cart?: boolean } | null)?.cart)
-  const cartGone = cartState.status === 'ready' && !cart
-
   useEffect(() => {
-    if (cartGone && cartOpenInHistory) navigate(location.pathname + location.search, { replace: true, state: null })
-  }, [cartGone, cartOpenInHistory, navigate, location.pathname, location.search])
+    if (selection.length === 0 && cartOpenInHistory) navigate(location.pathname + location.search, { replace: true, state: null })
+  }, [selection.length, cartOpenInHistory, navigate, location.pathname, location.search])
 
   // The court picked in the 3D view (or sent from the homepage) as ?court=<number>.
-  const daySlots = dayState.status === 'ready' ? dayState.data.slots : null
   const courtNumber = Number(params.get('court'))
   const chosenCourtId = daySlots?.find((s) => s.courtNumber === courtNumber)?.courtId ?? null
   const scrollToCourt = useRef(params.has('court'))
@@ -120,7 +99,7 @@ export function BookPage() {
     document.getElementById(`court-${chosenCourtId}`)?.closest('section')?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' })
   }, [chosenCourtId])
 
-  if (auth.status === 'unconfigured') return <BackendNotice title="Book a court" />
+  if (!isBackendConfigured) return <BackendNotice title="Book a court" />
 
   const chooseCourt = (courtId: string, scroll: boolean) => {
     const number = daySlots?.find((s) => s.courtId === courtId)?.courtNumber
@@ -129,65 +108,27 @@ export function BookPage() {
     const p = new URLSearchParams(params)
     p.set('court', String(number))
     setParams(p, { replace: true })
-    // Already the chosen court: the effect will not run again, so scroll here.
     if (scroll && courtId === chosenCourtId) {
       scrollToCourt.current = false
       document.getElementById(`court-${courtId}`)?.closest('section')?.scrollIntoView({ block: 'start' })
     }
   }
 
-  /**
-   * One tap books it into the cart: an open time is held straight away, and a
-   * time already in the cart is released. Signed-out visitors are sent to sign in.
-   */
-  const toggle = async (slot: AvailabilitySlot) => {
-    if (auth.status !== 'signed_in') {
-      navigate(signInHref)
-      return
-    }
-    if (pendingKey) return
+  /** Tap an open time to choose it; tap a chosen time to remove it. Nothing is reserved until Book. */
+  const toggle = (slot: AvailabilitySlot) => {
     const key = slotKey(slot)
     const when = `${slot.courtName} · ${formatTimeRange(slot.startsAt, slot.endsAt)}`
-    setPendingKey(key)
-    setNotice(null)
-    setCartError(null)
-    try {
-      if (slot.status === 'in_cart') {
-        // Compare instants: the cart and the court times can write the same time in different formats.
-        const held = cart?.slots.find((s) => s.courtId === slot.courtId && Date.parse(s.startsAt) === Date.parse(slot.startsAt))
-        if (!held) {
-          setNotice({ tone: 'error', text: `${when} is no longer in your cart.` })
-        } else {
-          await releaseSlots([held.id])
-          setNotice({ tone: 'info', text: `Removed ${when} from your cart.`, undo: { courtId: slot.courtId, startsAt: slot.startsAt, when } })
-        }
-      } else {
-        await holdSlots([{ courtId: slot.courtId, startsAt: slot.startsAt }])
-        setNotice({ tone: 'success', text: `Added ${when} to your cart.` })
-      }
-    } catch (e) {
-      setNotice({ tone: 'error', text: toAppError(e).message })
-    } finally {
-      setPendingKey(null)
-      refreshCart()
-      refreshDay()
-    }
-  }
-
-  /** Put a just-removed time back in the cart (if nobody else took it meanwhile). */
-  async function undoRemove(u: { courtId: string; startsAt: string; when: string }) {
-    if (pendingKey) return
-    setPendingKey(`${u.courtId}|${u.startsAt}`)
-    setNotice(null)
-    try {
-      await holdSlots([{ courtId: u.courtId, startsAt: u.startsAt }])
-      setNotice({ tone: 'success', text: `Put ${u.when} back in your cart.` })
-    } catch (e) {
-      setNotice({ tone: 'error', text: toAppError(e).message })
-    } finally {
-      setPendingKey(null)
-      refreshCart()
-      refreshDay()
+    setCheckoutError(null)
+    if (chosen.has(key) && !takenKeys.has(key)) {
+      setChosen((m) => {
+        const next = new Map(m)
+        next.delete(key)
+        return next
+      })
+      setNotice({ tone: 'info', text: `Removed ${when}.` })
+    } else if (slot.status === 'available') {
+      setChosen((m) => new Map(m).set(key, { ...slot, operatingDate: date }))
+      setNotice({ tone: 'success', text: `Chose ${when}. Add more times, or book when you are ready.` })
     }
   }
 
@@ -197,82 +138,46 @@ export function BookPage() {
     setParams(p, { replace: true })
   }
 
-  /** Empty the whole cart in one go (the held times are released for others). */
-  async function clearCart() {
-    if (!cart) return
-    setBusy(true)
-    setCartError(null)
-    try {
-      await cancelBooking(cart.id)
-      setNotice({ tone: 'success', text: 'Your cart is empty. Those times are free again.' })
-    } catch (e) {
-      setCartError(toAppError(e).message)
-    } finally {
-      setBusy(false)
-      refreshCart()
-      refreshDay()
-    }
-  }
+  const remove = (keys: string[]) =>
+    setChosen((m) => {
+      const next = new Map(m)
+      for (const k of keys) next.delete(k)
+      return next
+    })
 
-  /**
-   * Release held times. Removing the last ones cancels the empty cart, so no
-   * hold or timer is left behind.
-   */
-  async function releaseSlots(slotIds: string[]) {
-    if (cart && cart.slots.every((s) => slotIds.includes(s.id))) await cancelBooking(cart.id)
-    else for (const id of slotIds) await releaseHeldSlot(id)
-  }
-
-  async function removeFromCart(slotIds: string[]) {
+  async function book(details: CheckoutDetails) {
+    if (selection.length === 0) return
     setBusy(true)
-    setCartError(null)
+    setCheckoutError(null)
     try {
-      await releaseSlots(slotIds)
+      const created = await createGuestBooking(
+        selection.map((s) => ({ courtId: s.courtId, startsAt: s.startsAt })),
+        details.displayName,
+        details.phone,
+      )
+      const firstStartsAt = selection.map((s) => s.startsAt).sort()[0] ?? null
+      if (details.remember) saveBooking({ reference: created.reference, token: created.token, firstStartsAt })
+      navigate(bookingManagePath(created.reference, created.token), { state: { justBooked: true } })
     } catch (e) {
-      setCartError(toAppError(e).message)
-    } finally {
-      setBusy(false)
-      refreshCart()
-      refreshDay()
-    }
-  }
-
-  async function confirm(displayName: string) {
-    if (!cart) return
-    setBusy(true)
-    setCartError(null)
-    try {
-      if (displayName.trim() !== (cart.displayName ?? '')) await setBookingDisplayName(cart.id, displayName)
-      const result = await confirmBooking(cart.id)
-      if (result.status === 'expired') {
-        setNotice({ tone: 'error', text: 'Your hold ran out and those times were released. Choose your times again.' })
-        refreshCart()
-        refreshDay()
-      } else {
-        navigate(`${bookingPath(cart.id)}?confirmed=1`)
-      }
-    } catch (e) {
-      setCartError(toAppError(e).message)
+      setCheckoutError(toAppError(e).message)
       refreshDay()
     } finally {
       setBusy(false)
     }
   }
 
-  const cartPanel = (c: NonNullable<typeof cart>) => (
-    <CartPanel
-      cart={c}
+  const checkout = (
+    <GuestCheckoutPanel
+      selection={selection}
       busy={busy}
-      error={cartError}
-      onRemove={removeFromCart}
-      onClear={clearCart}
-      onConfirm={confirm}
-      onExpired={refreshCart}
+      error={checkoutError}
+      onRemove={remove}
+      onClear={() => setChosen(new Map())}
+      onSubmit={book}
       glass
     />
   )
-
-  const signInHref = `${routes.signIn}?next=${encodeURIComponent(location.pathname + location.search)}`
+  const total = selection.reduce((sum, s) => sum + (s.priceCentavos ?? 0), 0)
 
   return (
     <section aria-labelledby="book-title" className="pb-32 text-white lg:pb-16">
@@ -282,7 +187,10 @@ export function BookPage() {
             Book a court
           </h1>
           <p className="mt-2 max-w-2xl text-white/75">
-            Live schedule and court availability.
+            Choose your times, then book with your name and mobile number. No account needed.{' '}
+            <Link to={routes.myBookings} className="font-semibold text-white underline underline-offset-4">
+              Your bookings on this device
+            </Link>
           </p>
           <div className="mt-6">
             {dayState.status === 'ready' ? (
@@ -302,22 +210,18 @@ export function BookPage() {
 
       <Container className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0">
+          {taken.length > 0 ? (
+            <div className="mb-5">
+              <Alert tone="error" glass>
+                {taken.map((s) => `${s.courtName} · ${formatTimeRange(s.startsAt, s.endsAt)}`).join(', ')} was just taken by someone else, so it
+                is no longer in your times.
+              </Alert>
+            </div>
+          ) : null}
           {notice ? (
             <div className="mb-5">
               <Alert tone={notice.tone} glass>
-                <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                  {notice.text}
-                  {notice.undo ? (
-                    <button
-                      type="button"
-                      onClick={() => void undoRemove(notice.undo!)}
-                      disabled={Boolean(pendingKey)}
-                      className="font-semibold text-white underline underline-offset-4 hover:text-brand-green-200"
-                    >
-                      Undo
-                    </button>
-                  ) : null}
-                </span>
+                {notice.text}
               </Alert>
             </div>
           ) : null}
@@ -357,24 +261,39 @@ export function BookPage() {
                     dayState.data.day.lastBookableDate,
                   )}.`}
                 />
+              ) : dayState.data.slots.length === 0 ? (
+                <EmptyState
+                  icon={<CalendarClock className="size-5 text-brand-green" />}
+                  className="bg-white text-brand-charcoal"
+                  title="Courts are to be announced"
+                  description="Online booking opens once the club lists its courts."
+                />
               ) : (
                 <>
                   <VenueView
                     compact
                     className="mb-4"
-                    courts={venueCourts(dayState.data.slots)}
+                    courts={venueCourts(withSelection(dayState.data.slots, chosen))}
                     selectedId={chosenCourtId}
                     onSelect={(id) => chooseCourt(id, true)}
                   />
                   <div className="mb-4">
                     <CourtCardsLegend />
                   </div>
-                  <CourtCards caption={`Court times for ${formatOperatingDate(date)}`} operatingDate={date} slots={dayState.data.slots} onToggle={toggle} pendingKey={pendingKey} chosenCourtId={chosenCourtId} onChooseCourt={(id) => chooseCourt(id, false)} />
-                  {dayState.data.slots.length > 0 && dayState.data.slots.every((s) => s.status === 'unpriced' || s.status === 'past') ? (
+                  <CourtCards
+                    caption={`Court times for ${formatOperatingDate(date)}`}
+                    operatingDate={date}
+                    slots={withSelection(dayState.data.slots, chosen)}
+                    onToggle={toggle}
+                    pendingKey={busy ? 'busy' : null}
+                    chosenCourtId={chosenCourtId}
+                    onChooseCourt={(id) => chooseCourt(id, false)}
+                  />
+                  {dayState.data.slots.every((s) => s.status === 'unpriced' || s.status === 'past') ? (
                     <div className="mt-4">
                       <Alert tone="info" glass>
-                    Court rates for this day are not set yet, so these times cannot be booked online.
-                  </Alert>
+                        Online booking is not open for these times yet. Contact the club to book.
+                      </Alert>
                     </div>
                   ) : null}
                 </>
@@ -384,28 +303,23 @@ export function BookPage() {
         </div>
 
         <aside className="min-w-0 lg:sticky lg:top-[calc(var(--spacing-header)+1.5rem)] lg:self-start">
-          {cart && drawer ? (
-            <CartDrawer hours={cart.slots.length} totalCentavos={cart.totalCentavos} holdExpiresAt={cart.holdExpiresAt}>
-              {cartPanel(cart)}
+          {selection.length > 0 && drawer ? (
+            <CartDrawer hours={selection.length} totalCentavos={total} holdExpiresAt={null}>
+              {checkout}
             </CartDrawer>
-          ) : cart ? (
-            cartPanel(cart)
-          ) : auth.status === 'signed_in' ? (
-            <div className="hidden lg:block">
-              <EmptyState title="Your cart is empty" description="Tap any open time to add it to your cart. Tap it again to remove it." className="court-card on-glass border-0 text-white" />
-            </div>
+          ) : selection.length > 0 ? (
+            checkout
           ) : (
-            <div className="court-card on-glass p-6 text-white">
-              <h2 className="text-lg font-semibold">Sign in to book</h2>
-              <p className="mt-2 text-white/75">You can look at open times now. Sign in to hold and confirm them.</p>
-              <Link to={signInHref} className={buttonStyles({ className: 'mt-4' })}>
-                Sign in to book
-              </Link>
+            <div className="hidden lg:block">
+              <EmptyState
+                title="No times chosen yet"
+                description="Tap any open time to choose it. Tap it again to remove it."
+                className="court-card on-glass border-0 text-white"
+              />
             </div>
           )}
         </aside>
       </Container>
-
     </section>
   )
 }

@@ -7,8 +7,7 @@ import { buttonStyles } from '@/components/ui/buttonStyles'
 import { Container } from '@/components/ui/Container'
 import { Alert, SubmitButton, TextField } from '@/components/ui/form'
 import { ErrorState, ListSkeleton } from '@/components/ui/states'
-import { bookingPath, playerEventPath, playerRoutes, routes } from '@/config/navigation'
-import { useInPlayerArea } from '@/features/player/area'
+import { routes } from '@/config/navigation'
 import { useAuth } from '@/features/auth/context'
 import { useLiveQuery } from '@/features/booking/useLiveQuery'
 import {
@@ -43,7 +42,6 @@ const regStatusText: Record<string, string> = {
 export function EventDetailPage() {
   const { slug = '' } = useParams()
   const auth = useAuth()
-  const inPlayerArea = useInPlayerArea()
   const userId = auth.status === 'signed_in' ? (auth.user?.id ?? null) : null
 
   const load = useCallback(async () => {
@@ -60,7 +58,7 @@ export function EventDetailPage() {
   return (
     <section aria-labelledby="event-title" className="bg-brand-green-50 py-12 sm:py-16">
       <Container className="max-w-4xl">
-        <Link to={inPlayerArea ? (state.status === 'ready' && state.data.event.event_type === 'open_play' ? playerRoutes.openPlay : playerRoutes.events) : routes.events} className="text-sm font-semibold text-brand-green underline-offset-4 hover:underline">
+        <Link to={routes.events} className="text-sm font-semibold text-brand-green underline-offset-4 hover:underline">
           ← All events
         </Link>
         {state.status === 'loading' ? (
@@ -87,15 +85,10 @@ function EventBody({ event: e, mine, userId, onChanged }: { event: PublicEvent; 
   // While the player can register, the Register form shows the divisions as cards to choose from.
   const entered = new Set(active.map((r) => r.division_name))
   const choosing = Boolean(userId) && e.registration_state === 'open' && e.divisions.some((d) => !entered.has(d.name))
-  const signInPath = `${routes.signIn}?next=${encodeURIComponent(playerEventPath(e.slug))}`
-  // The button in the description's "how to register" box: jump to the form, or sign in first.
+  // The button in the description's "how to register" box: jump to the registration note or form.
   const registerAction =
-    e.registration_state !== 'open' ? null : userId ? (
-      <Button onClick={() => document.getElementById('register')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Register and pay</Button>
-    ) : (
-      <Link to={signInPath} className={buttonStyles()}>
-        Sign in to register
-      </Link>
+    e.registration_state !== 'open' ? null : (
+      <Button onClick={() => document.getElementById('register')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>How to register</Button>
     )
   return (
     <div className="mt-6 flex flex-col gap-8">
@@ -181,11 +174,10 @@ function EventBody({ event: e, mine, userId, onChanged }: { event: PublicEvent; 
           </div>
         ) : null
       ) : (
+        // Guest registration by name comes in Phase 2; until then the club registers players at the desk.
         <div id="register" className="scroll-mt-24 rounded-(--radius-tile) border border-brand-green-200 bg-white p-5">
-          <p className="font-semibold">Sign in to register and see who’s playing.</p>
-          <Link to={signInPath} className={buttonStyles({ className: 'mt-3' })}>
-            Sign in
-          </Link>
+          <p className="font-semibold">Online registration is coming soon.</p>
+          <p className="mt-1 text-brand-charcoal-500">For now, register with the club at the desk.</p>
         </div>
       )}
 
@@ -309,7 +301,7 @@ function MyEntries({ entries, onChanged }: { entries: MyRegistration[]; onChange
             </div>
             <div className="flex flex-wrap gap-2">
               {r.status === 'pending' && r.booking_id ? (
-                <Link to={bookingPath(r.booking_id)} className={buttonStyles({})}>
+                <Link to={routes.myBookings} className={buttonStyles({})}>
                   Pay {r.fee_centavos ? formatPeso(r.fee_centavos) : 'fee'}
                 </Link>
               ) : null}
@@ -362,7 +354,7 @@ function RegisterForm({ event: e, mine, onDone }: { event: PublicEvent; mine: My
     return result.status === 'pending' && result.booking_id ? (
       <Alert title="Your place is held">
         Pay the entry fee of {formatPeso(result.amount_due_centavos)} to confirm it.{' '}
-        <Link to={bookingPath(result.booking_id)} className="font-semibold text-brand-green underline">
+        <Link to={routes.myBookings} className="font-semibold text-brand-green underline">
           Pay now
         </Link>
       </Alert>
