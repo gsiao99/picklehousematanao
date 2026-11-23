@@ -518,7 +518,7 @@ Object.assign(rpc, {
 })
 
 // ---------------------------------------------------------------------------
-// Sample payment set-up: three methods with SAMPLE details, one receipt waiting
+// Sample payment set-up: GCash with SAMPLE details and cash, one receipt waiting
 // ---------------------------------------------------------------------------
 function seedPayments() {
   db.venue_settings[0].payment_due_hours = 2
@@ -527,10 +527,7 @@ function seedPayments() {
   const methods = [
     { kind: 'gcash', label: 'GCash', account_name: 'SAMPLE ACCOUNT (demo)', account_number: '09000000000', bank_name: null, qr: 1,
       instructions: 'Demo only — do not send money. Put your booking reference in the message.' },
-    { kind: 'maya', label: 'Maya', account_name: 'SAMPLE ACCOUNT (demo)', account_number: '09000000000', bank_name: null, qr: 2,
-      instructions: 'Demo only — do not send money.' },
-    { kind: 'bank_transfer', label: 'Bank transfer', account_name: 'SAMPLE ACCOUNT (demo)', account_number: '0000-0000-0000',
-      bank_name: 'Sample Bank (demo)', qr: 0, instructions: 'Demo only — do not send money.' },
+    { kind: 'cash', label: 'Cash at the desk', account_name: null, account_number: null, bank_name: null, qr: 0, instructions: null },
   ]
   methods.forEach((m, i) => {
     const qrPath = m.qr ? `methods/sample-${m.kind}.svg` : null
@@ -544,21 +541,21 @@ function seedPayments() {
 
   // Sample bookings: Marco has a receipt waiting; Joy's booking today is unpaid.
   const tomorrow = addDays(opDateOf(nowIso()), 1)
-  const marco = db.bookings.find((b) => b.player_id === 'demo-marco' && liveSlots(b.id).some((s) => s.operating_date === tomorrow))
-  const joy = db.bookings.find((b) => b.player_id === 'demo-joy' && liveSlots(b.id).some((s) => s.operating_date !== tomorrow))
+  const marco = db.bookings.find((b) => String(b.display_name).startsWith('Marco') && liveSlots(b.id).some((s) => s.operating_date === tomorrow))
+  const joy = db.bookings.find((b) => String(b.display_name).startsWith('Joy') && liveSlots(b.id).some((s) => s.operating_date !== tomorrow))
   if (joy) joy.payment_status = 'unpaid'
   if (marco) {
     marco.payment_status = 'pending_verification'
-    const proof = `demo-marco/${marco.id}/sample-receipt.svg`
-    files.set(key('payment-proofs', proof), { url: sampleReceipt(peso(marco.total_centavos), 'SAMPLE-0001'), owner: 'demo-marco', bucket: 'payment-proofs' })
+    const proof = `${marco.id}/sample/receipt.svg`
+    files.set(key('payment-proofs', proof), { url: sampleReceipt(peso(marco.total_centavos), 'SAMPLE-0001'), owner: null, bucket: 'payment-proofs' })
     db.payments.push({
       id: uid(), booking_id: marco.id, payment_method_id: 'method-gcash', method_kind: 'gcash', amount_centavos: marco.total_centavos,
-      reference_no: 'SAMPLE-0001', proof_path: proof, proof_sha256: null, status: 'submitted', submitted_by: 'demo-marco',
+      reference_no: 'SAMPLE-0001', proof_path: proof, proof_sha256: null, status: 'submitted', submitted_by: null,
       reviewed_by: null, reviewed_at: null, review_note: null, created_at: new Date(Date.now() - 40 * 60_000).toISOString(), updated_at: nowIso(),
     })
     for (const u of ['demo-staff', 'demo-admin'])
       db.notifications.push({ id: uid(), user_id: u, kind: 'payment_submitted', title: `Payment to check: ${marco.reference}`,
-        body: `GCash · ${peso(marco.total_centavos)}`, link: '/admin/payments', read_at: null,
+        body: `${marco.display_name} · GCash · ${peso(marco.total_centavos)}`, link: '/admin/payments', read_at: null,
         created_at: new Date(Date.now() - 40 * 60_000).toISOString() })
   }
 }

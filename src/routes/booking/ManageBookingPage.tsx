@@ -53,7 +53,9 @@ export function ManageBookingPage() {
   const params = useParams()
   const location = useLocation()
   const reference = normalizeReference(params.reference ?? '')
-  const hash = useHash()
+  const windowHash = useHash()
+  // The single-file demo keeps its URL in memory, so the token is only in the router's location there.
+  const hash = import.meta.env.VITE_ROUTER_MODE === 'memory' ? location.hash : windowHash
   const token = decodeURIComponent(hash.replace(/^#/, ''))
   const justBooked = Boolean((location.state as { justBooked?: boolean } | null)?.justBooked)
 

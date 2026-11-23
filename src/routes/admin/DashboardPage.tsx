@@ -200,7 +200,7 @@ function StatusChecks({ summary: s, deadlines, isAdmin }: { summary: DashboardSu
     {
       ok: s.payment_methods_active > 0,
       label: s.payment_methods_active > 0 ? `${s.payment_methods_active} payment method${s.payment_methods_active === 1 ? '' : 's'} enabled` : 'Payment methods are set',
-      fix: 'Players cannot pay online until GCash, Maya or bank details are added.',
+      fix: 'Guests cannot pay by GCash until the GCash account details are added.',
     },
     {
       ok: true,
@@ -380,7 +380,7 @@ const moneyKinds: { kind: string; label: string }[] = [
 ]
 
 /**
- * The club day's money by method, to check against the GCash, Maya and bank
+ * The club day's money by method, to check against the GCash
  * apps and the cash drawer at closing. Booking payments count what staff
  * approved (the amount on each receipt).
  */

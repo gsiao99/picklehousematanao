@@ -289,7 +289,7 @@ function AddWalkIn({ data, onAdded }: { data: ManageData; onAdded: () => void })
         </SelectField>
         <TextField
           label="Reference number (optional)"
-          hint="From the GCash, Maya or bank receipt."
+          hint="From the GCash receipt."
           value={reference}
           onChange={(e) => setReference(e.target.value)}
           maxLength={60}

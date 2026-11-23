@@ -3,8 +3,9 @@ import { useAuth } from '@/features/auth/context'
 import { demoSignInAs } from '@/lib/supabase/backend'
 import { cn } from '@/lib/cn'
 
+// Guests have no account: "Guest" simply signs out.
 const accounts = [
-  { id: 'demo-player', label: 'Player' },
+  { id: null, label: 'Guest' },
   { id: 'demo-staff', label: 'Staff' },
   { id: 'demo-admin', label: 'Admin' },
 ]
@@ -18,13 +19,13 @@ export function DemoBanner() {
       <Container className="flex flex-col gap-2 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between">
         <p>
           <span className="font-semibold">Demo with sample data.</span>{' '}
-          <span className="text-white/75">Hours, prices, payment accounts, events, players and results are made up. No money moves and nothing is saved.</span>
+          <span className="text-white/75">Courts, hours, prices, payment accounts, bookings, events and results are made up. No money moves and nothing is saved.</span>
         </p>
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Try the demo as">
           <span className="text-white/75">Try as</span>
           {accounts.map((a) => (
             <button
-              key={a.id}
+              key={a.label}
               type="button"
               onClick={() => demoSignInAs(a.id)}
               aria-pressed={current === a.id}
@@ -36,11 +37,6 @@ export function DemoBanner() {
               {a.label}
             </button>
           ))}
-          {current ? (
-            <button type="button" onClick={() => demoSignInAs(null)} className="rounded-full px-3 py-1 text-white/75 hover:text-white">
-              Sign out
-            </button>
-          ) : null}
         </div>
       </Container>
     </div>

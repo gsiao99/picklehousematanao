@@ -4,7 +4,7 @@ import type { Database, Enums, Tables, TablesInsert } from '@/types/database'
 
 /**
  * Manual payment verification. There is no payment gateway: players send money
- * by GCash, Maya or bank transfer outside this app, upload a receipt, and staff
+ * by GCash outside this app (or cash at the desk), upload a receipt, and staff
  * check it. Amounts, statuses and reviewer details are set only by database
  * functions; the browser never decides them.
  */

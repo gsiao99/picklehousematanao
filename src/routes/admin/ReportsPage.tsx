@@ -31,7 +31,7 @@ const columns = {
     { header: 'Court rentals (PHP)', value: (r) => pesos(r.court_rental_centavos) },
     { header: 'Event fees (PHP)', value: (r) => pesos(r.event_fee_centavos) },
     { header: 'Cash (PHP)', value: (r) => pesos(r.cash_centavos) },
-    { header: 'GCash / Maya / bank (PHP)', value: (r) => pesos(r.online_centavos) },
+    { header: 'GCash and other online (PHP)', value: (r) => pesos(r.online_centavos) },
     { header: 'Total approved (PHP)', value: (r) => pesos(r.total_centavos) },
     { header: 'Of which refunded or refund due (PHP)', value: (r) => pesos(r.refunded_or_due_centavos) },
   ] satisfies CsvColumn<Fn['report_revenue_daily']['Returns'][number]>[],

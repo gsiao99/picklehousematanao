@@ -92,7 +92,7 @@ export function PaymentsPage() {
           Payments
         </h1>
         <p className="mt-2 max-w-2xl text-brand-charcoal-500">
-          Check each receipt against your GCash, Maya or bank account before approving, and enter the amount the receipt shows.
+          Check each receipt against the club’s GCash account before approving, and enter the amount the receipt shows.
           Only that amount is counted; anything short stays due. Every decision is recorded with your name.
         </p>
 

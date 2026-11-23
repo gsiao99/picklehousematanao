@@ -95,7 +95,7 @@ export function PaymentMethodsSettings() {
           <EmptyState
             icon={<Wallet className="size-5 text-brand-green" />}
             title="No payment methods yet"
-            description="Add the club’s GCash, Maya or bank account so players can pay for bookings."
+            description="Add the club’s GCash account so guests can pay for bookings by receipt."
           />
         ) : null}
         {state.status === 'ready' && state.data.length > 0 ? (
