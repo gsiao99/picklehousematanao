@@ -46,5 +46,5 @@ To be resolved by the Phase 1 schema baseline (the files are rewritten or remove
 ## Known gaps carried into Phase 1
 
 - Logo files are not in the repository yet; the header and footer show the venue name as text.
-- The schema still contains player accounts, café, inventory, rentals, gallery and sales from the source; it seeds three indoor courts that are not confirmed for this venue. Phase 1 replaces all migrations with a single baseline and seeds only confirmed facts (hours 8:00 AM – 11:00 PM; ₱100 8 AM – 5 PM; ₱200 5 PM – 10 PM).
+- The schema still contains player accounts, café, inventory, rentals, gallery and sales from the source; it seeds three indoor courts that are not confirmed for this venue. Phase 1 replaces all migrations with a single baseline and seeds only confirmed facts (hours Monday to Sunday, 8:00 AM – 11:00 PM; ₱100 8 AM – 5 PM; ₱200 5 PM – 10 PM).
 - The player area (`/player/*`) and sign-up still exist and still describe accounts.

@@ -65,7 +65,7 @@ brand-source/       original logo file, once committed (not served)
 
 ## Content rules
 
-- **No invented facts.** Live opening hours and rates come from the database (`operating_hours`, `rate_rules`). `src/config/venue.ts` holds the owner-confirmed fallback: open 8:00 AM – 11:00 PM; ₱100 from 8:00 AM to 5:00 PM and ₱200 from 5:00 PM to 10:00 PM. The 10:00 – 11:00 PM rate, whether rates are per court or per player, the number of courts, the public name and all contact details are not confirmed and show "To be announced". "Picklehouse Matanao" is the working name.
+- **No invented facts.** Live opening hours and rates come from the database (`operating_hours`, `rate_rules`). `src/config/venue.ts` holds the owner-confirmed fallback: open Monday to Sunday, 8:00 AM – 11:00 PM; ₱100 from 8:00 AM to 5:00 PM and ₱200 from 5:00 PM to 10:00 PM. The 10:00 – 11:00 PM rate, whether rates are per court or per player, the number of courts, the public name and all contact details are not confirmed and show "To be announced". "Picklehouse Matanao" is the working name.
 - **No fake availability.** Bookings, open play sessions and events come only from the database. Sample data exists only in the demo preview build (`npm run build:preview`), which shows a demo banner.
 
 ## Brand

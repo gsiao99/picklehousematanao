@@ -6,7 +6,7 @@ This repo is the Picklehouse Matanao booking system, built in phases from a copy
 React 19, TypeScript (strict), Vite, Tailwind CSS v4, React Router, Supabase (Postgres, Auth for staff only, Storage, RLS). Backend setup and the security model: `docs/backend-setup.md`.
 
 ## Rules
-- Never invent prices, opening hours, addresses, contact details, court counts or availability. Unknown values are `null` in `src/config/venue.ts` and render as "To be announced". Confirmed so far: Purok 3, New Visayas, Matanao, Davao del Sur; open 8:00 AM – 11:00 PM; ₱100 8:00 AM – 5:00 PM and ₱200 5:00 PM – 10:00 PM. Not confirmed: the 10–11 PM rate, per-court or per-player and per-hour basis, number of courts, public name ("Picklehouse Matanao" is the working name), contact details.
+- Never invent prices, opening hours, addresses, contact details, court counts or availability. Unknown values are `null` in `src/config/venue.ts` and render as "To be announced". Confirmed so far: Purok 3, New Visayas, Matanao, Davao del Sur; open Monday to Sunday, 8:00 AM – 11:00 PM; ₱100 8:00 AM – 5:00 PM and ₱200 5:00 PM – 10:00 PM. Not confirmed: the 10–11 PM rate, per-court or per-player and per-hour basis, number of courts, public name ("Picklehouse Matanao" is the working name), contact details.
 - Never show sample bookings, sessions or tournaments as if they were live. Data functions return empty lists until the backend exists.
 - Colours and fonts come only from tokens in `src/styles/index.css`. No raw hex in components. Lime (`accent`) is never text on a light surface; text on lime uses `accent-ink`.
 - Outfit for display headlines only; Inter for everything else. No all-caps small labels.

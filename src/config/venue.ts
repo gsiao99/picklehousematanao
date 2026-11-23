@@ -104,8 +104,8 @@ export const venue: VenueConfig = {
     facebookUrl: null,
     instagramUrl: null,
   },
-  // Given by the owner, Nov 23 2026. The live value comes from Admin → Settings; this is the fallback.
-  operatingHours: [{ days: 'Every day', hours: '8:00 AM – 11:00 PM' }],
+  // Given by the owner, Nov 23 2026 (Monday to Sunday). The live value comes from Admin → Settings; this is the fallback.
+  operatingHours: [{ days: 'Monday to Sunday', hours: '8:00 AM – 11:00 PM' }],
   // Number of courts not yet confirmed.
   courts: [],
   rateLines: [
@@ -115,8 +115,8 @@ export const venue: VenueConfig = {
       description: 'Whether rates are per court or per player, and per hour or per session, is to be announced, as is the rate from 10:00 PM to 11:00 PM.',
       // Amounts given by the owner, Nov 23 2026. Whether they are per court or per player, per hour, is not yet confirmed.
       rates: [
-        { amountCentavos: 10000, unit: null, window: 'Daytime · Every day · 8:00 AM – 5:00 PM' },
-        { amountCentavos: 20000, unit: null, window: 'Evening · Every day · 5:00 PM – 10:00 PM' },
+        { amountCentavos: 10000, unit: null, window: 'Daytime · Monday to Sunday · 8:00 AM – 5:00 PM' },
+        { amountCentavos: 20000, unit: null, window: 'Evening · Monday to Sunday · 5:00 PM – 10:00 PM' },
       ],
     },
   ],
