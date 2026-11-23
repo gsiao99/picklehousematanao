@@ -43,6 +43,7 @@ describe('old player-area addresses', () => {
     expect(currentPathFor('/player/events/mine')).toBe('/events')
     expect(currentPathFor('/player/dashboard')).toBe('/')
     expect(currentPathFor('/account')).toBe('/')
+    expect(currentPathFor('/signup')).toBe('/')
     expect(currentPathFor('/admin/payments')).toBe('/admin/payments')
   })
 })

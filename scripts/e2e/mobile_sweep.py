@@ -1,6 +1,6 @@
 """
 Mobile and page-health sweep: every screen at 360 px wide, as a visitor, a
-player, staff and an admin, against the local test stack. For each page:
+guests (no account), staff and an admin, against the local test stack. For each page:
 no sideways scrolling, no JavaScript errors, no "could not load" error state.
 Also downloads each CSV report and checks it against the database.
 
@@ -10,6 +10,7 @@ Run after community_local.py (it reuses that test data):
   python3 scripts/e2e/mobile_sweep.py /tmp/dd-e2e
 """
 import asyncio
+import os
 import csv
 import io
 import re
@@ -45,7 +46,7 @@ async def session(browser, email=None):
         await page.fill("input[name=email]", email)
         await page.fill("input[name=password]", "courts2026")
         await page.click("button[type=submit]")
-        await page.wait_for_url(re.compile(r"/(player/dashboard|admin)$"), timeout=15000)
+        await page.wait_for_url(re.compile(r"/admin$"), timeout=15000)
     return page, errors
 
 
@@ -62,22 +63,22 @@ async def sweep(page, errors, who, paths):
 
 
 async def main():
-    booking = sql("select id from public.bookings where player_id = '11111111-1111-4111-8111-111111111111' order by created_at limit 1")
-    cup = sql("select id || '|' || slug from public.events where title = 'Test Cup'").split("|")
-    op = sql("select id || '|' || slug from public.events where title = 'Test Open Play'").split("|")
+    # A guest booking with a known manage-link token (TEST FIXTURE).
+    sql("delete from public.bookings where manage_token_hash = private.token_hash('sweep-token-0123456789abcdefghij')")
+    ref = sql("insert into public.bookings (status, total_centavos, display_name, guest_phone, manage_token_hash) values "
+              "('confirmed', 10000, 'Sweep Guest', '09170009999', private.token_hash('sweep-token-0123456789abcdefghij')) returning reference")
+    ref = ref.splitlines()[0]
+    # Events come from community_local.py (Phase 2); without them the event pages are skipped.
+    cup = (sql("select id || '|' || slug from public.events where title = 'Test Cup'") or "|").split("|")
+    op = (sql("select id || '|' || slug from public.events where title = 'Test Open Play'") or "|").split("|")
+    has_events = bool(cup[0] and op[0])
     async with async_playwright() as p:
-        browser = await p.chromium.launch()
+        browser = await p.chromium.launch(executable_path=os.environ.get("CHROMIUM_PATH") or None)
 
         page, errors = await session(browser)
-        await sweep(page, errors, "visitor", ["/", "/courts", "/open-play", "/login", "/signup", "/forgot-password", "/live",
-                                             "/events", f"/events/{cup[1]}", "/no-such-page"])
-
-        page, errors = await session(browser, "ana.reyes@test.local")
-        await sweep(page, errors, "player", ["/player/dashboard", "/player/profile", "/player/book", "/player/bookings",
-                                            f"/player/bookings/{booking}" if booking else "/player/bookings",
-                                            "/player/notifications", "/player/open-play", "/player/events", "/player/events/mine",
-                                            "/player/paddle-stacking", "/player/payments", "/player/history", "/player/leaderboard",
-                                            f"/player/events/{op[1]}", f"/player/events/{cup[1]}", f"/events/{cup[1]}"])
+        await sweep(page, errors, "visitor", ["/", "/courts", "/open-play", "/login", "/forgot-password", "/live",
+                                             "/events", "/no-such-page"] + ([f"/events/{cup[1]}"] if has_events else []))
+        await sweep(page, errors, "guest", ["/book", "/my-bookings", f"/booking/{ref}#sweep-token-0123456789abcdefghij"])
 
         page, errors = await session(browser, "carla.mendoza@test.local")
         await sweep(page, errors, "staff", ["/admin", "/admin/schedule", "/admin/bookings", "/admin/players?q=ana",
@@ -85,9 +86,9 @@ async def main():
         check("staff without reports.view: reports refused", await page.get_by_text("This page is for club staff").count() == 1)
 
         page, errors = await session(browser, "lea.navarro@test.local")
-        await sweep(page, errors, "admin", ["/admin", "/admin/events", f"/admin/events/{cup[0]}", f"/admin/events/{cup[0]}?tab=matches",
-                                           f"/admin/events/{cup[0]}?tab=setup", f"/admin/events/{op[0]}?tab=queue",
-                                           "/admin/members", "/admin/settings", "/admin/payments", "/admin/reports"])
+        await sweep(page, errors, "admin", ["/admin", "/admin/events", "/admin/members", "/admin/settings", "/admin/payments", "/admin/reports"]
+                    + ([f"/admin/events/{cup[0]}", f"/admin/events/{cup[0]}?tab=matches", f"/admin/events/{cup[0]}?tab=setup",
+                        f"/admin/events/{op[0]}?tab=queue"] if has_events else []))
 
         # CSV reports, downloaded through the browser and checked against the database
         today = sql("select private.operating_date_of(now())")
@@ -117,18 +118,19 @@ async def main():
             await page.get_by_label("To", exact=True).fill(last)
             name, raw = await fetch_csv()
             rows = list(csv.reader(io.StringIO(raw.decode("utf-8-sig"))))
-            check(f"CSV {kind}: header plus one row per database record", len(rows) - 1 == expected[kind] and expected[kind] > 0,
+            check(f"CSV {kind}: header plus one row per database record", len(rows) - 1 == expected[kind] and (expected[kind] > 0 or kind == 'check_ins'),  # check-ins come from Phase 2 events
                   f"{len(rows) - 1} rows, expected {expected[kind]}")
             check(f"CSV {kind}: .csv file with a UTF-8 BOM for Excel", name.endswith(".csv") and raw.startswith(b"\xef\xbb\xbf"), name)
-        await page.get_by_label("Report", exact=True).select_option(label="Event registrations")
-        await page.get_by_label("Event", exact=True).wait_for()
-        option = await page.get_by_label("Event", exact=True).locator("option", has_text="Test Cup").get_attribute("value")
-        await page.get_by_label("Event", exact=True).select_option(option)
-        name, raw = await fetch_csv()
-        rows = list(csv.DictReader(io.StringIO(raw.decode("utf-8-sig"))))
-        check("CSV registrations: every entry with its registered category",
-              len(rows) == int(sql(f"select count(*) from public.event_registrations where event_id = '{cup[0]}'"))
-              and {r["Category"] for r in rows if r["Status"] == "confirmed"} == {"Mixed Doubles", "Singles"}, rows[:2])
+        if has_events:
+            await page.get_by_label("Report", exact=True).select_option(label="Event registrations")
+            await page.get_by_label("Event", exact=True).wait_for()
+            option = await page.get_by_label("Event", exact=True).locator("option", has_text="Test Cup").get_attribute("value")
+            await page.get_by_label("Event", exact=True).select_option(option)
+            name, raw = await fetch_csv()
+            rows = list(csv.DictReader(io.StringIO(raw.decode("utf-8-sig"))))
+            check("CSV registrations: every entry with its registered category",
+                  len(rows) == int(sql(f"select count(*) from public.event_registrations where event_id = '{cup[0]}'"))
+                  and {r["Category"] for r in rows if r["Status"] == "confirmed"} == {"Mixed Doubles", "Singles"}, rows[:2])
         await browser.close()
 
     failed = 0

@@ -31,33 +31,33 @@ React 19, TypeScript (strict), Vite, Tailwind CSS v4, React Router, Supabase (Po
 - Paths come from `src/config/navigation.ts`; never hard-code them. A manage link's token goes in the URL fragment or path segment handled only by the client and the token-checked function, and the page sets `Referrer-Policy: no-referrer`.
 - After staff sign-in use `postSignInPath(next, { isStaff })`; `next` only if `safeNextPath` accepts it.
 - Guards decide from `get_my_access` only, never from browser storage; RLS and the database functions remain the real enforcement.
-- Until Phase 1 removes it, the inherited player area (`/player/*`) is legacy; do not extend it.
+- The player area was removed in Phase 1. Old player URLs redirect through `currentPathFor` (to `/book`, `/my-bookings` or the homepage). Guest pages: `/book`, `/booking/<reference>#<token>` (built with `bookingManagePath`), `/my-bookings` (links saved on this device only).
 
 ## Database rules
-- Every schema change is a new file in `supabase/migrations/`; never edit a migration that has been applied to any hosted project. (Phase 1 replaces the inherited migrations with one baseline before anything is applied.)
+- Every schema change is a new file in `supabase/migrations/`; never edit a migration that has been applied to any hosted project. Phase 1 replaced the 51 inherited migrations with `20261201000100_baseline.sql` plus `20261201000200_guest_bookings.sql`; nothing has been applied to a hosted project yet.
 - Every new table: enable RLS, add policies, and add explicit grants (default privileges give new tables no API access).
 - Roles and permissions come only from `user_roles` / `staff_permissions`, checked with `private.has_role()` / `private.has_permission()`. Never trust anything the client sends, including user metadata.
 - Privileged writes go through SECURITY DEFINER functions with `set search_path = ''`, an explicit permission check (staff permission, or guest token hash), a required reason for staff actions, and `app.audit_reason`.
 - Only the publishable key may appear in frontend code. Secret / service-role keys stay server-side.
-- Add pgTAP tests in `supabase/tests/` for every policy and every guest function (right token, wrong token, other guest's reference, anonymous table access denied, phone never in public output); run `npm run test:db`. After schema changes, regenerate `src/types/database.ts`.
+- Add pgTAP tests in `supabase/tests/` for every policy and every guest function (right token, wrong token, other guest's reference, anonymous table access denied, phone never in public output); run `npm run test:db`. Tests that need courts, hours or rates include `\ir _fixtures.sql` (the baseline seeds only confirmed facts). After schema changes, regenerate `src/types/database.ts` with `scripts/local-db/gen-types.py` and keep its hand edits (e.g. `player_level` as `string`, nullable arguments).
 - Route all errors through `toAppError` (`src/lib/errors.ts`).
 
 ## Booking rules
-- Never write booking_slots or bookings from the client; use the booking functions (hold, release, confirm, guest cancel, staff block / remove block).
+- Never write booking_slots or bookings from the client; use the booking functions (`guest_create_booking`, `guest_cancel_booking`, staff `cancel_booking`, `staff_set_booking_display_name`, `staff_block_courts`, `staff_remove_block`). Insert slots with their final status: updating a slot's status re-runs the exclusion check and can deadlock under a rush.
 - The exclusion constraint `booking_slots_no_overlap` is the source of truth for availability. Do not replace it with application checks.
 - Booking status and `payment_status` are separate; payment code changes `payment_status` only.
 - Prices only from `rate_rules`, hours only from `operating_hours` / `operating_hour_exceptions`. Never hard-code either. Unconfirmed rates stay absent (not zero).
 - New functions: Postgres grants EXECUTE to PUBLIC by default — revoke and grant explicitly, and keep test 07's anonymous-function allowlist current.
-- Run `npm run test:db`, `python3 scripts/local-db/concurrency-test.py` and the e2e booking test before finishing booking work.
+- Run `npm run test:db`, `python3 scripts/local-db/concurrency-test.py` and `scripts/e2e/guest_booking_local.py` (after `scripts/e2e/setup_local.sh`) before finishing booking work.
 
 ## Payment rules
 - No payment gateway is integrated. Payment is a GCash/QR receipt upload or cash at the desk, reviewed by staff. Never describe payments as automatic or claim a gateway.
-- Guests submit a receipt through the token-checked submit function (file uploaded under a path tied to the booking, via a signed upload URL issued by that function); staff decide with `staff_review_payment`, `staff_record_cash_payment`, `staff_record_refund`. Never write `payments` or `bookings.payment_status` from the client.
+- Guests upload a receipt only to the path of an upload grant from `guest_begin_receipt_upload` (random, inside the booking's folder, 15 minutes) and submit with `guest_submit_payment`; staff decide with `staff_review_payment`, `staff_record_cash_payment`, `staff_record_refund`. Never write `payments` or `bookings.payment_status` from the client.
 - Amounts due come from the database (`private.amount_due`), never from the browser.
-- Nobody reviews their own payment; rejection always needs a reason; every decision is audited.
+- Nobody reviews their own payment (`private.booked_by`: an account booking, or a guest booking under the staff member's profile phone); rejection always needs a reason; every decision is audited.
 - Receipts and QR codes live in private buckets and are shown only through short-lived signed links. Payment account details are never public beyond what checkout needs.
 - Notifications are in-app only. Do not claim email or SMS delivery unless it is built and configured.
-- Run `scripts/e2e/payments_local.py` after payment work.
+- Run `scripts/e2e/guest_booking_local.py` after payment work.
 
 ## Event rules
 - Registrations go through database functions; never insert `event_registrations` from the client. Capacity and duplicates are enforced in the database; do not add client-side substitutes.
@@ -67,7 +67,7 @@ React 19, TypeScript (strict), Vite, Tailwind CSS v4, React Router, Supabase (Po
 - Run `scripts/e2e/community_local.py` and the concurrency test after event or queue work.
 
 ## Release rules
-- Browser tests run behind the production headers from `vercel.json`; if a feature needs a new origin (images, API, fonts), update the Content-Security-Policy there and rerun them.
+- Browser tests run behind the production headers from `vercel.json`; if a feature needs a new origin (images, API, fonts), update the Content-Security-Policy there and rerun them. They need Python `playwright` and `psycopg[binary]`; set `CHROMIUM_PATH` to use an installed Chromium. Also run `scripts/e2e/mobile_sweep.py` (every page at 360 px) after UI work.
 - Never point destructive, concurrency or e2e tests at staging or production; use `scripts/local-db/start-postgres.sh` and the local stand-ins.
 - After any deploy or migration push, run `scripts/ops/smoke-test.mjs` against that environment.
 - Migrations must stay additive once deployed so a Vercel rollback keeps working; prove it with `scripts/local-db/upgrade-path-test.py`.

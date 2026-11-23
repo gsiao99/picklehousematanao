@@ -68,7 +68,7 @@ function Pill({ slot, onToggle, pendingKey, lateDay }: { slot: AvailabilitySlot;
     <button
       type="button"
       aria-pressed={inCart}
-      aria-label={inCart ? `${description}. Tap to remove from your cart` : description}
+      aria-label={inCart ? `${description}. Chosen; tap to remove` : description}
       aria-busy={pending || undefined}
       disabled={Boolean(pendingKey)}
       onClick={() => onToggle(slot)}
@@ -78,7 +78,7 @@ function Pill({ slot, onToggle, pendingKey, lateDay }: { slot: AvailabilitySlot;
       {inCart ? (
         <span className="mt-0.5 flex items-center gap-1 text-xs">
           <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
-          In cart
+          Chosen
         </span>
       ) : price && peak ? (
         <span className="peak-tag mt-1 px-1.5 text-xs leading-4 tabular-nums">{price}</span>
@@ -233,7 +233,7 @@ export function CourtCardsLegend() {
       </li>
       <li className="flex items-center gap-2">
         <span className="time-pill time-pill--selected !min-h-0 !w-6 h-4" aria-hidden="true" />
-        In your cart
+        Chosen
       </li>
       <li className="flex items-center gap-2">
         <span className="time-pill time-pill--off !min-h-0 !w-6 h-4" aria-hidden="true" />

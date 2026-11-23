@@ -180,7 +180,7 @@ export function BookPage() {
   const total = selection.reduce((sum, s) => sum + (s.priceCentavos ?? 0), 0)
 
   return (
-    <section aria-labelledby="book-title" className="pb-32 text-white lg:pb-16">
+    <section aria-labelledby="book-title" className="player-night bg-night-calm pb-32 text-white lg:pb-16">
       <div className="py-10 sm:py-12">
         <Container>
           <h1 id="book-title" className="font-display text-display-lg text-white">

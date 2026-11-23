@@ -237,13 +237,13 @@ function PaymentCard({ item: p, onReviewed }: { item: PaymentSearchRow; onReview
             </dd>
             {waiting ? (
               <>
-                <dt className="text-brand-charcoal-500">Player says</dt>
+                <dt className="text-brand-charcoal-500">Guest says</dt>
                 <dd className="font-semibold tabular-nums">
                   {p.declared_centavos !== null ? `${formatPeso(p.declared_centavos)} sent` : <span className="font-normal text-brand-charcoal-500">Not given</span>}
                 </dd>
               </>
             ) : null}
-            <dt className="text-brand-charcoal-500">Player</dt>
+            <dt className="text-brand-charcoal-500">Guest</dt>
             <dd className="min-w-0 break-words">
               {p.player_name}
               {p.player_phone ? ` · ${p.player_phone}` : ''}

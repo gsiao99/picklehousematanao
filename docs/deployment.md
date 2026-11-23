@@ -29,14 +29,14 @@ Production stack: **Vercel** (static site, HTTPS, custom domain) + **Supabase** 
    ```
    If the project already has tables from another tool, read "Review before pushing" in `docs/backend-setup.md` first.
 3. **pg_cron**: Database → Extensions → enable `pg_cron`, then check the job exists:
-   `select jobname, schedule, command from cron.job;` → `dd-booking-jobs` every minute. If missing:
+   `select jobname, schedule, command from cron.job;` → `ph-booking-jobs` every minute. If missing:
    `select cron.schedule('dd-booking-jobs', '* * * * *', 'select private.run_booking_jobs()');`
    Then confirm it runs: `select status, start_time from cron.job_run_details order by start_time desc limit 5;`
 4. **Realtime**: Database → Publications → `supabase_realtime` includes `schedule_signals` and `notifications`.
 5. **Storage**: Storage → buckets `payment-proofs`, `payment-qr`, `avatars` are **private**; `venue-assets` is public. The migrations set this; confirm in the dashboard.
 6. **Auth → URL Configuration**:
    - Site URL: `https://<your-domain>`
-   - Redirect URLs: `https://<your-domain>/auth/callback`, `https://<your-domain>/reset-password` (staging: the staging domain's equivalents). The app sends exactly these two (tested in `scripts/e2e/auth_simulated.py`).
+   - Redirect URLs: `https://<your-domain>/auth/callback`, `https://<your-domain>/reset-password` (staging: the staging domain's equivalents). The app sends exactly these two (staff password reset; sign-up is off).
 7. **Auth → Providers → Email**: email sign-up on, **Confirm email on**, minimum password length 8, letters and digits. **Auth → SMTP**: your provider (the built-in sender is rate-limited and not for production).
 8. **Database → Advisors**: run the Security and Performance advisors; resolve or record every finding.
 9. **First administrator**: sign up in the app with the owner's email, confirm it, then in the SQL editor:

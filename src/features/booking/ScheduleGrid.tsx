@@ -131,7 +131,7 @@ export function ScheduleGrid({ slots, selected, onToggle, allowRemove, pendingKe
                             <button
                               type="button"
                               aria-pressed={removable || isSelected}
-                              aria-label={removable ? `${description}. Tap to remove from your cart` : description}
+                              aria-label={removable ? `${description}. Chosen; tap to remove` : description}
                               aria-busy={pending || undefined}
                               disabled={Boolean(pendingKey)}
                               onClick={() => onToggle?.(slot)}

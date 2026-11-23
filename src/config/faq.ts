@@ -13,13 +13,13 @@ export const faqItems: FaqItem[] = [
     id: 'how-to-book',
     question: 'How do I book a court?',
     answer:
-      'Sign in, choose a court and time on the live schedule, then check out. You pay by GCash and upload a screenshot of your receipt, or pay cash at the desk. Your booking is confirmed once our staff verify it.',
+      'Choose a court and time on the live schedule, then book with your name and mobile number. No account is needed. You get a reference code and a private booking link: keep the link, it is how you pay, check or cancel your booking. Pay by GCash and upload your receipt, or pay cash at the desk. Staff check every payment.',
   },
   {
     id: 'multiple',
     question: 'Can I book more than one court or separate time slots?',
     answer:
-      'Yes. Add any mix of courts and times to your cart — for example one court in the afternoon and another in the evening — and pay for them in a single checkout.',
+      'Yes. Choose any mix of courts and times, for example one court in the afternoon and another in the evening, and book them together.',
   },
   {
     id: 'payment',
@@ -37,7 +37,13 @@ export const faqItems: FaqItem[] = [
     id: 'account',
     question: 'Do I need an account?',
     answer:
-      'You can browse rates, courts and events without one. To book a court, join open play or enter a tournament, you need a free player account.',
+      'No. You book with your name and mobile number. Your name shows on the court board; your number is only seen by club staff. Keep your booking link: anyone with it can see, pay for or cancel that booking.',
+  },
+  {
+    id: 'cancel',
+    question: 'Can I cancel?',
+    answer:
+      'Yes, from your booking link, up to 30 minutes before your first time. If you already paid, the club arranges your refund.',
   },
   {
     id: 'tournaments',

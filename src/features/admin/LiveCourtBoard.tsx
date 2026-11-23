@@ -179,7 +179,7 @@ function CourtCard({
       <div className="mt-4 flex flex-col gap-2 md:min-h-28">
         {cur && isRental ? (
           <>
-            <p className="text-lg leading-tight font-semibold">{cur.head.player_name || 'Player'}</p>
+            <p className="text-lg leading-tight font-semibold">{cur.head.player_name || 'Guest'}</p>
             <p className="flex flex-wrap items-center gap-x-2 text-sm text-brand-charcoal-500">
               <span className="font-mono">{cur.head.booking_reference}</span>
               {cur.head.player_phone ? (

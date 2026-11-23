@@ -101,7 +101,7 @@ export function CartDrawer({
         onClick={show}
         aria-expanded={open}
         aria-controls="cart-drawer"
-        aria-label={`Open your cart, ${hours} court-hour${hours === 1 ? '' : 's'}, ${formatPeso(totalCentavos)}${urgent && holdExpiresAt ? `, ${countdown(holdExpiresAt, now)} left` : ''}`}
+        aria-label={`Open your chosen times, ${hours} court-hour${hours === 1 ? '' : 's'}, ${formatPeso(totalCentavos)}${urgent && holdExpiresAt ? `, ${countdown(holdExpiresAt, now)} left` : ''}`}
         className={cn(
           // Slides up the moment the first time goes in the cart.
           'fixed right-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 inline-flex h-12 items-center gap-2 rounded-full px-4 font-semibold text-white shadow-lg transition-colors motion-safe:animate-cart-in',
@@ -125,7 +125,7 @@ export function CartDrawer({
         <button
           type="button"
           tabIndex={-1}
-          aria-label="Close your cart"
+          aria-label="Close your chosen times"
           onClick={close}
           className={cn('absolute inset-0 bg-brand-charcoal/40 transition-opacity duration-200', open ? 'opacity-100' : 'opacity-0')}
         />
@@ -147,7 +147,7 @@ export function CartDrawer({
             <button
               ref={closeButton}
               type="button"
-              aria-label="Close your cart"
+              aria-label="Close your chosen times"
               onClick={close}
               className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-white hover:bg-white/10"
             >

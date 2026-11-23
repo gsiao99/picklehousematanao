@@ -4,7 +4,7 @@ export const slotKey = (s: { courtId: string; startsAt: string }) => `${s.courtI
 
 export const statusText: Record<SlotStatus, string> = {
   available: 'Available',
-  in_cart: 'In your cart',
+  in_cart: 'Chosen',
   held: 'Being booked',
   mine: 'Your booking',
   booked: 'Booked',
@@ -35,7 +35,7 @@ export const statusStyle: Record<SlotStatus, string> = {
   unpriced: 'border-dashed border-brand-charcoal-200 bg-transparent text-brand-charcoal-500',
 }
 
-export const legendStatuses: SlotStatus[] = ['available', 'in_cart', 'mine', 'booked', 'pending', 'maintenance', 'private_event']
+export const legendStatuses: SlotStatus[] = ['available', 'in_cart', 'booked', 'pending', 'maintenance', 'private_event']
 
 
 export interface RateBand {

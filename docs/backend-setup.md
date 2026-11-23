@@ -15,7 +15,7 @@ The database schema, security rules and storage buckets are migrations in `supab
 | 7. Run the database tests against staging (`supabase test db`) | Developer | CLI |
 | 8. Enter weekly opening hours and court rates in the app (**Booking settings**). Until then nothing is bookable | Owner | `/admin/settings` |
 | 9. Check pg_cron and Realtime (below) | Developer | Dashboard → Database |
-| 10. Add the club's GCash, Maya and/or bank account (and QR codes) in **Settings → Payment methods**. Until then players are told online payment is not set up | Owner | `/admin/settings` |
+| 10. Add the club's GCash account (and QR code) in **Settings → Payment methods**; GCash is seeded inactive. Until then guests are offered cash at the desk only | Owner | `/admin/settings` |
 | 11. Give payment staff the `payments.verify` permission (admins have it already) | Owner | `/admin/members` |
 | 12. Decide whether unpaid bookings should be cancelled automatically (**Booking rules → Cancel unpaid bookings after**). Off by default | Owner | `/admin/settings` |
 | 13. Give event staff `events.manage` (all events) or `openplay.manage` (open play only); give desk staff `bookings.manage` to check in court rentals | Owner | `/admin/members` |
@@ -71,40 +71,44 @@ The function refuses if any admin already exists, and it cannot be called throug
 
 ## Security model in one page
 
-- **Roles** (`player`, `staff`, `admin`) live in `user_roles`; staff **permissions** in `staff_permissions`. Players have no write access to either; only admin RPCs change them.
-- **Row Level Security** is on for every table. Players see their own profile, bookings, slots, payments and registrations. Staff see what their permissions allow. Admins hold every permission.
-- **Column grants** stop players from changing their confirmed level or account status, even on their own profile.
-- **Bookings and payments** cannot be written directly by players. The booking (Phase 4) and checkout (Phase 5) RPCs will be the only way in.
-- **Payment proofs** go to the private `payment-proofs` bucket at `{player_id}/{booking_id}/{file}`. Upload is allowed only into the player's own booking folder; reading is limited to the owner and staff with `payments.verify`; nobody can overwrite or delete a proof through the API.
+- **No player accounts.** Guests book with a display name (public) and a PH mobile number (private, staff only). Only staff sign in: public sign-up is off (`enable_signup = false`; also turn it off under Authentication → Providers → Email on the hosted project). New sign-ins get a profile and **no role** until an admin grants one.
+- **Roles** (`staff`, `admin`; `player` is legacy until Phase 2) live in `user_roles`; staff **permissions** in `staff_permissions`. Only admin RPCs change them.
+- **Row Level Security** is on for every table. Visitors (anon) cannot read bookings, slots, payments, profiles or the guest tables at all. Staff see what their permissions allow; any staff account can see guest phone numbers (to reach guests), nobody else can. Admins hold every permission.
+- **Manage links.** Each guest booking has a reference (`PH-YYMMDD-0001`) and a private link `/booking/<reference>#<token>`. The token is 32 random bytes (`gen_random_bytes`); only its SHA-256 is stored (`bookings.manage_token_hash`, granted to no API role, not even staff). It sits in the URL fragment, which browsers never send to a server, and the page sets `referrer: no-referrer`.
+- **Guest functions** (all SECURITY DEFINER, `search_path = ''`, executable by anon): `guest_create_booking`, `guest_get_booking`, `guest_cancel_booking`, `guest_begin_receipt_upload`, `guest_submit_payment`. Each checks the reference + token hash and returns only that booking. A wrong token, an unknown reference and a locked reference all answer `{"error":"not_found"}`.
+- **Rate limits** (in the database): failed token checks are logged per reference; 10 failures in 15 minutes lock that reference for the rest of the window. New guest bookings per mobile number per hour are capped by `guest_bookings_per_hour` (default 10; an abuse guard, not a limit on how many bookings a number may hold). Receipt upload paths: 10 per booking per hour.
+- **Public names:** the court board and live view show `bookings.display_name` unless staff hid it (`display_name_hidden`); hidden names never leave the database through public functions. Staff with `bookings.manage` edit or hide names with `staff_set_booking_display_name` (reason required, audited).
+- **Own bookings:** staff never review, mark paid or record cash for their own booking. A guest booking counts as theirs when its phone matches the phone on their staff profile, so set every staff member's phone.
 - **Audit log**: changes to roles, permissions, profiles, rates, settings, courts, bookings, slots and payments are recorded with the actor and reason. Admins can read it; nobody can edit it.
 
 ## Booking engine
 
-- **Flow:** players select times → `hold_slots` holds them for `hold_minutes` (all or nothing) → `confirm_booking` revalidates under a row lock and confirms → `cancel_booking` releases them. Booking status (`held`, `confirmed`, `cancelled`, `expired`, `completed`) is separate from `payment_status` (`unpaid`, `pending_verification`, `paid`, `refund_due`, `refunded`, `waived`).
-- **No double booking:** the `booking_slots_no_overlap` exclusion constraint rejects any overlapping live use of a court, whatever the timing. Blocks, maintenance, private events and event sessions are slots too, so they can never overlap bookings either.
-- **Prices** come only from active `rate_rules` (peak / off-peak windows, optional per court). An hour with no rate shows "No rate set" and cannot be booked. Prices are snapshotted on each slot when held.
-- **Hours** come from `operating_hours` (weekly) and `operating_hour_exceptions` (dates). A day with no hours is not bookable. Closing after midnight stays on the same operating day.
-- **Policy settings** (`venue_settings`): `booking_window_days` (default 30), `hold_minutes` (15), `max_slots_per_booking` (8), `player_cancel_cutoff_hours` (empty = only staff can cancel confirmed bookings). These defaults are system starting values, not club policy — set them in Booking settings.
-- **Scheduled jobs:** the migrations schedule `private.run_booking_jobs()` every minute with pg_cron when the extension is available. It expires stale holds and, if a payment deadline is set, cancels unpaid bookings past it. If pg_cron was not available when the migrations ran, enable it under Database → Extensions and run:
+- **Flow:** a guest chooses times in the browser (nothing is held) → `guest_create_booking` checks every time (court open, on the hour, in the window and opening hours, a bookable rate, no clash) and inserts the slots as confirmed in one transaction (all or nothing) → the guest pays or cancels through the manage link. Staff cancel with `cancel_booking` (reason required). Booking status is separate from `payment_status` (`unpaid`, `pending_verification`, `paid`, `refund_due`, `refunded`, `waived`).
+- **No double booking:** the `booking_slots_no_overlap` exclusion constraint rejects any overlapping live use of a court, whatever the timing (proved by `scripts/local-db/concurrency-test.py`). Blocks, maintenance, private events and event sessions are slots too.
+- **Prices** come only from active `rate_rules` whose basis (`unit`) is set. The seeded ₱100 / ₱200 rates have no basis yet (not confirmed), so they are shown but cannot be booked until an admin sets the basis. Prices are snapshotted on each slot.
+- **Hours** come from `operating_hours` (seeded Monday to Sunday, 8:00 AM – 11:00 PM) and `operating_hour_exceptions`. Courts are not seeded: add them in Settings once the number is confirmed.
+- **Policy settings** (`venue_settings`): `booking_window_days` (30), `max_slots_per_booking` (8), `guest_cancel_cutoff_minutes` (30), `guest_bookings_per_hour` (10), payment deadline (off). Starting values, not club policy.
+- **Scheduled jobs:** `private.run_booking_jobs()` every minute with pg_cron (`ph-booking-jobs`) when available: payment reminders, cancelling unpaid bookings past a deadline (if one is set), and clearing old rate-limit rows and unused upload grants. If pg_cron was not available when the migrations ran, enable it under Database → Extensions and run:
   ```sql
-  select cron.schedule('dd-booking-jobs', '* * * * *', 'select private.run_booking_jobs()');
+  select cron.schedule('ph-booking-jobs', '* * * * *', 'select private.run_booking_jobs()');
   ```
-  Without it, holds still stop blocking courts on time (availability ignores expired holds, and every hold or confirm releases them), but **unpaid bookings are not cancelled at their deadline**.
-- **Live updates:** the app subscribes to `public.schedule_signals` with Supabase Realtime. The migration adds it to the `supabase_realtime` publication when present; check Database → Publications. The app also refreshes every 20–30 seconds and when a tab regains focus, so it stays current even without Realtime.
+- **Live updates:** the app subscribes to `public.schedule_signals` with Supabase Realtime, and also refreshes every 20–30 seconds and when a tab regains focus.
 
 ## Payments (manual verification)
 
-There is **no payment gateway**. Players send money by GCash, Maya or bank transfer outside the app, upload a screenshot, and staff check it against the club's account. Nothing is ever marked paid automatically.
+There is **no payment gateway**. Guests pay by GCash outside the app and upload a screenshot, or pay cash at the desk; staff check every payment. Nothing is ever marked paid automatically.
 
-- **Player:** booking page → amount due (computed by the database from the booking total minus approved payments) → choose an enabled method → see the account details and QR code → upload a receipt (JPG/PNG/WebP, 5 MB) → optional reference number → `submit_payment`. Booking `payment_status` becomes `pending_verification`; the booking itself stays `confirmed`.
-- **Staff with `payments.verify`:** `/admin/payments` queue → open the receipt through a five-minute signed link → approve, or reject with a required reason (`staff_review_payment`). The reviewer and time are stored on the payment; the audit log records the change and reason. Approval sets `payment_status = paid` and confirms linked event registrations; rejection sets it back to `unpaid` so the player can pay again. Cash at the desk: `staff_record_cash_payment`. Refunds owed after a cancellation: `staff_record_refund`.
-- **Protections:** nobody can review a payment for their own booking or one they submitted (admins included). Players cannot write the `payments` table, booking payment status, or amounts; only the database functions above can. One waiting submission per booking; a reference number or receipt file (SHA-256) cannot be reused for another live payment.
-- **Private files:** receipts are in the private `payment-proofs` bucket under `{player}/{booking}/`, readable only by the player and payment verifiers, never updatable or deletable. QR codes are in the private `payment-qr` bucket (signed-in users can view; admins upload). Account details are no longer readable by visitors; players see them only through `get_payment_instructions` for their own confirmed booking.
-- **Notifications** are in-app (`public.notifications`, bell in the header): verifiers are told about new submissions; players about approval, rejection (with reason), refunds and non-payment cancellations. Delivered by Realtime when enabled, otherwise within a minute by polling. **No email or SMS is sent.**
-- **Payment deadline** (`payment_due_hours`, off by default): when set, a confirmed booking gets `payment_due_at` = the earlier of confirmation + N hours and its first hour. Bookings still `unpaid` after that are cancelled by the scheduled job and their times released; bookings with a payment being checked are kept.
+- **Guest:** manage link → amount due (from the database) → GCash account details and QR code (signed link; only QR codes of active methods open for visitors) → `guest_begin_receipt_upload` returns a random path inside the booking's folder, valid 15 minutes → the browser uploads the image to exactly that path in the private `payment-proofs` bucket (the storage policy accepts only an open grant's path) → `guest_submit_payment` (amount sent, optional reference number). `payment_status` becomes `pending_verification`; the booking stays `confirmed`.
+- **Staff with `payments.verify`:** `/admin/payments` queue (guest name and phone shown) → open the receipt through a five-minute signed link → approve with the amount on the receipt, or reject with a required reason (`staff_review_payment`). The guest sees the result and any rejection reason on the manage link. Cash at the desk: `staff_record_cash_payment`. Refunds owed after a cancellation: `staff_record_refund`.
+- **Cancelling:** guests cancel through the manage link until `guest_cancel_cutoff_minutes` before the first court time; a paid or pending payment becomes `refund_due` and payment staff are notified.
+- **Protections:** nobody can review a payment for their own booking or one they submitted (admins included). Nobody writes `payments`, booking payment status or amounts directly. One waiting submission per booking; a reference number or receipt file (SHA-256) cannot be reused for another live payment.
+- **Notifications** are in-app for staff only (bell in the staff area). Guests have no inbox: they see everything on the manage link. **No email or SMS is sent.**
+- **Payment deadline** (`payment_due_minutes` or `payment_due_hours`, off by default): when set, a booking gets `payment_due_at` = the earlier of booking time + the deadline and its first hour. Bookings still `unpaid` after that are cancelled by the scheduled job and their times released; bookings with a payment being checked are kept. **Decide this before launch:** with no deadline, unpaid guest bookings hold courts until staff cancel them.
 - **Staff screens:** `/admin` dashboard (today's bookings, payments waiting, unpaid today, refunds due, courts in use, setup status, today's schedule), `/admin/bookings` (search by reference, name or phone; filter by date and statuses), `/admin/players` (lookup; email shown only to staff with `players.manage`).
 
 ## Community: open play, events and the queue
+
+> **Inherited design, converted in Phase 2.** The registration, queue and leaderboard functions below still expect player accounts, which no longer exist; until Phase 2 staff add people as walk-ins and the public event pages say to register at the desk. Phase 2 replaces account registration with registration by name and mobile number, and links entries that share a mobile number into one guest player for the leaderboard.
 
 - **Events** (`events`, types open play, tournament, social, clinic, league) have a status (draft → registration open → closed → in progress → completed, or cancelled with a reason), optional skill range, capacity in players, registration open/close times, and a fee per player or per team. Registration closes at the deadline or when the event starts; staff can still add walk-ins.
 - **Categories and divisions:** staff create the club's own `event_categories`; each event can have `event_divisions` (category, singles or doubles, skill range, entry limit, fee, and match format). Every `event_registrations` row stores the division **and** its category. "Who's Playing" (`get_whos_playing`) reads those, never the player's profile level.
@@ -127,10 +131,9 @@ Deployment, monitoring, backups and rollback: `docs/deployment.md`. Launch statu
 npm run test       # unit tests (Vitest)
 npm run test:db    # migrations + RLS and booking tests on a local PostgreSQL
 python3 scripts/local-db/concurrency-test.py   # parallel-session double-booking races
-scripts/e2e/setup_local.sh /tmp/dd && python3 scripts/e2e/booking_local.py /tmp/dd    # booking, browser end to end
-scripts/e2e/setup_local.sh /tmp/dd && python3 scripts/e2e/payments_local.py /tmp/dd   # payments, browser end to end
-scripts/e2e/setup_local.sh /tmp/dd && python3 scripts/e2e/community_local.py /tmp/dd  # events, queue, matches, browser end to end
-python3 scripts/e2e/mobile_sweep.py /tmp/dd           # every page at 360 px, CSV reports (after community_local)
+scripts/e2e/setup_local.sh /tmp/ph && python3 scripts/e2e/guest_booking_local.py /tmp/ph   # guest booking and payments, browser end to end
+python3 scripts/e2e/mobile_sweep.py /tmp/ph                                              # every page at 360 px
+# scripts/e2e/community_local.py (events, queue, matches) still drives player accounts; it is rewritten in Phase 2.
 python3 scripts/local-db/upgrade-path-test.py          # migrations applied in stages over existing data
 scripts/local-db/start-postgres.sh                     # start the throwaway local PostgreSQL these use
 supabase test db   # the same SQL tests on a Supabase stack (real pgTAP)

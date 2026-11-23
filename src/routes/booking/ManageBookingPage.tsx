@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { Check, Copy, KeyRound, Link2Off } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -32,6 +32,17 @@ function useNoReferrer() {
   }, [])
 }
 
+/** The URL fragment (the manage-link token), kept current when only the fragment changes (a different link pasted in the same tab). */
+function useHash(): string {
+  return useSyncExternalStore(
+    (onChange) => {
+      window.addEventListener('hashchange', onChange)
+      return () => window.removeEventListener('hashchange', onChange)
+    },
+    () => window.location.hash,
+  )
+}
+
 /**
  * A guest's booking, opened with its private manage link
  * (/booking/<reference>#<token>). Everything goes through token-checked
@@ -42,7 +53,8 @@ export function ManageBookingPage() {
   const params = useParams()
   const location = useLocation()
   const reference = normalizeReference(params.reference ?? '')
-  const token = decodeURIComponent(location.hash.replace(/^#/, ''))
+  const hash = useHash()
+  const token = decodeURIComponent(hash.replace(/^#/, ''))
   const justBooked = Boolean((location.state as { justBooked?: boolean } | null)?.justBooked)
 
   useEffect(() => {
@@ -51,7 +63,8 @@ export function ManageBookingPage() {
 
   // Looks again every minute (a receipt being checked, a cancellation by staff).
   const load = useCallback(() => getGuestBooking(reference, token), [reference, token])
-  const { state, refresh } = useLiveQuery(isBackendConfigured && token ? `guest-booking:${reference}` : null, load, {
+  // The token is part of the key so another link on the same page loads afresh (kept in memory only).
+  const { state, refresh } = useLiveQuery(isBackendConfigured && token ? `guest-booking:${reference}:${token}` : null, load, {
     watchDates: [],
     pollMs: 60_000,
   })
@@ -67,8 +80,9 @@ export function ManageBookingPage() {
           </Link>
         </p>
         <h1 id="manage-title" className="mt-2 font-display text-display-lg text-brand-green">
-          Booking <span className="tabular-nums">{reference}</span>
+          Your booking
         </h1>
+        <p className="mt-1 font-semibold tabular-nums text-brand-charcoal">Reference {reference}</p>
 
         <div className="mt-6 rounded-(--radius-tile) bg-white p-5 shadow-sm sm:p-8">
           {!token ? (
@@ -165,7 +179,7 @@ function BookingView({
 
       <GuestPaymentPanel booking={booking} token={token} onChanged={onChanged} />
 
-      {booking.status === 'confirmed' ? <CancelSection booking={booking} token={token} onChanged={onChanged} /> : null}
+      {booking.status === 'confirmed' && booking.firstStartsAt ? <CancelSection booking={booking} token={token} onChanged={onChanged} /> : null}
     </>
   )
 }

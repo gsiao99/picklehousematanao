@@ -2,7 +2,7 @@
 
 Booking and venue management for Picklehouse Matanao, a pickleball venue in Purok 3, New Visayas, Matanao, Davao del Sur. *dine, drink, enjoy.*
 
-**Status: Phase 0 (setup and rebrand).** Started from a copy of the Dink District Digos code, without its git history. Nothing is deployed. The plan:
+**Status: Phase 1 (guest bookings) built and tested locally.** Started from a copy of the Dink District Digos code, without its git history. Nothing is deployed. The plan:
 
 | Phase | Scope |
 | --- | --- |
@@ -12,7 +12,7 @@ Booking and venue management for Picklehouse Matanao, a pickleball venue in Puro
 | 3 | Trimmed admin: Dashboard, Schedule, Payments, Bookings, Reports, Events, Settings |
 | 4 | Launch: Supabase (Singapore), Vercel, domain |
 
-The code in `src/` still contains the source system's player accounts, café, inventory, rentals, gallery and sales. They are removed in Phases 1–3. Test status and inherited database test failures: `docs/launch-readiness.md`. Supabase configuration and the security model: `docs/backend-setup.md`. Deployment runbook: `docs/deployment.md`.
+Guests book without an account: choose times on `/book`, enter a display name and PH mobile number, and get a reference code with a private manage link (`/booking/<reference>#<token>`) to pay (GCash receipt or cash at the desk), check or cancel. Staff sign in at `/login` (footer link). Event registration, open play and the leaderboard still use the inherited account-based design until Phase 2; the admin menu is trimmed in Phase 3. Test status and inherited database test failures: `docs/launch-readiness.md`. Supabase configuration and the security model: `docs/backend-setup.md`. Deployment runbook: `docs/deployment.md`.
 
 ## Run it
 
@@ -56,7 +56,7 @@ src/
 └── styles/         index.css — all design tokens
 supabase/           migrations, pgTAP tests, CLI config
 scripts/local-db/   local Postgres stand-in, type generator, concurrency and upgrade tests
-scripts/e2e/        browser tests (booking, payments, community, player area, mobile)
+scripts/e2e/        browser tests: guest booking and payments, mobile sweep, community (Phase 2)
 scripts/ops/        post-deploy smoke test, Storage backup
 docs/               backend setup, deployment runbook, launch readiness
 public/             manifest, robots.txt (icons and sitemap once the logo and domain are in)

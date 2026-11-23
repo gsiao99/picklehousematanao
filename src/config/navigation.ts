@@ -68,7 +68,7 @@ export function currentPathFor(path: string): string {
     [/^\/(player\/)?bookings(\/[^/]+)?\/?$/, () => routes.myBookings],
     [/^\/player\/(open-play)\/?$/, () => routes.openPlay],
     [/^\/player\/events(\/mine)?\/?$/, () => routes.events],
-    [/^\/(player(\/.*)?|payments|history|leaderboard|notifications|account|my\/events)\/?$/, () => routes.home],
+    [/^\/(player(\/.*)?|signup|payments|history|leaderboard|notifications|account|my\/events)\/?$/, () => routes.home],
   ]
   for (const [re, to] of map) {
     if (re.test(pathname)) return to() + (to() === routes.home ? '' : rest)

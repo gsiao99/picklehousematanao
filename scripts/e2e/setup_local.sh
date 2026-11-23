@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Prepare the local stack for scripts/e2e/booking_local.py and payments_local.py:
-# fresh migrated dd_test, test accounts, an app build wired to the local API
+# Prepare the local stack for scripts/e2e/guest_booking_local.py:
+# fresh migrated dd_test, staff accounts and test courts/rates, an app build wired to the local API
 # stand-in, and both servers running. Test-only.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -10,19 +10,26 @@ mkdir -p "$OUT"
 "$ROOT/scripts/local-db/run-tests.sh" >/dev/null
 
 psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d dd_test <<'SQL'
+-- Staff accounts only (guests have none). TEST FIXTURES, not venue data.
 insert into auth.users (id, email, raw_user_meta_data) values
-  ('11111111-1111-4111-8111-111111111111', 'ana.reyes@test.local', '{"full_name":"Ana Reyes","phone":"09171234567"}'),
-  ('22222222-2222-4222-8222-222222222222', 'ben.cruz@test.local', '{"full_name":"Ben Cruz"}'),
   ('33333333-3333-4333-8333-333333333333', 'carla.mendoza@test.local', '{"full_name":"Carla Mendoza"}'),
   ('44444444-4444-4444-8444-444444444444', 'dan.villanueva@test.local', '{"full_name":"Dan Villanueva"}'),
   ('55555555-5555-4555-8555-555555555555', 'lea.navarro@test.local', '{"full_name":"Lea Navarro"}');
+update public.profiles set phone = '09170005555' where id = '55555555-5555-4555-8555-555555555555';
 insert into public.user_roles (user_id, role) values
   ('33333333-3333-4333-8333-333333333333', 'staff'), ('44444444-4444-4444-8444-444444444444', 'staff'),
   ('55555555-5555-4555-8555-555555555555', 'admin');
 insert into public.staff_permissions (user_id, permission) values
   ('33333333-3333-4333-8333-333333333333', 'schedule.manage'),
   ('33333333-3333-4333-8333-333333333333', 'bookings.cancel'),
+  ('33333333-3333-4333-8333-333333333333', 'bookings.manage'),
   ('44444444-4444-4444-8444-444444444444', 'payments.verify');
+-- Courts, a bookable rate and a GCash account: TEST FIXTURES (the real ones are not confirmed yet).
+insert into public.courts (number, name, sort_order) values (1, 'Court 1', 1), (2, 'Court 2', 2), (3, 'Court 3', 3);
+delete from public.rate_rules;
+insert into public.rate_rules (product, label, tier, starts_at, ends_at, price_centavos, unit)
+values ('court_rental', 'Test rate', 'standard', '08:00', '23:00', 10000, 'per_court_hour');
+update public.payment_methods set account_name = 'TEST ACCOUNT', account_number = '09000000001', is_active = true where kind = 'gcash';
 SQL
 
 cd "$ROOT"
