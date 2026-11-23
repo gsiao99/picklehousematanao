@@ -213,10 +213,13 @@ begin
 end;
 $$;
 
--- Adds one-hour rental slots (status 'held') to a booking, with every check
--- the old player cart made: court open, on the hour, in the future, within
--- the booking window and opening hours, with a bookable rate.
-create or replace function private.add_rental_slots(_booking_id uuid, _slots jsonb, _actor uuid)
+-- Adds one-hour rental slots to a booking, with every check the old player
+-- cart made: court open, on the hour, in the future, within the booking window
+-- and opening hours, with a bookable rate. Slots are inserted with their final
+-- status: changing status later re-runs the exclusion check, and two sessions
+-- doing that at once can deadlock.
+create or replace function private.add_rental_slots(_booking_id uuid, _slots jsonb, _actor uuid,
+                                                    _status public.slot_status default 'held')
 returns void
 language plpgsql
 security definer
@@ -283,7 +286,7 @@ begin
       values (
         _booking_id, _item.court_id,
         tstzrange(_item.starts_at, _item.starts_at + interval '1 hour', '[)'),
-        'rental', 'held', _rate.price_centavos,
+        'rental', _status, _rate.price_centavos,
         jsonb_build_object('rate_id', _rate.rate_id, 'label', _rate.label, 'tier', _rate.tier,
                            'price_centavos', _rate.price_centavos),
         _actor
@@ -299,7 +302,7 @@ begin
   end loop;
 
   select count(*) into _count from public.booking_slots
-   where booking_id = _booking_id and status = 'held';
+   where booking_id = _booking_id and status = _status;
   if _count > _settings.max_slots_per_booking then
     raise exception 'One booking can hold up to % court-hours.', _settings.max_slots_per_booking using errcode = '22023';
   end if;
@@ -404,10 +407,8 @@ begin
   values (null, null, 'held', now() + make_interval(mins => _settings.hold_minutes), _name, _ph, private.token_hash(_token))
   returning * into _b;
 
-  perform private.add_rental_slots(_b.id, _slots, null);
-
-  -- Confirm straight away: the court times are reserved; payment is separate.
-  update public.booking_slots set status = 'confirmed' where booking_id = _b.id and status = 'held';
+  -- Confirmed straight away: the court times are reserved; payment is separate.
+  perform private.add_rental_slots(_b.id, _slots, null, 'confirmed');
   update public.bookings set status = 'confirmed', confirmed_at = now(), hold_expires_at = null where id = _b.id;
   perform private.recalculate_booking_total(_b.id);
 
@@ -1402,7 +1403,7 @@ $function$;
 -- ---------------------------------------------------------------------------
 revoke all on function
   private.clean_display_name(text), private.normalize_ph_mobile(text), private.mask_phone(text),
-  private.token_hash(text), private.guest_booking_id(text, text), private.add_rental_slots(uuid, jsonb, uuid),
+  private.token_hash(text), private.guest_booking_id(text, text), private.add_rental_slots(uuid, jsonb, uuid, public.slot_status),
   private.guest_booking_json(uuid), private.receipt_upload_allowed(text), private.is_active_payment_qr(text),
   private.next_booking_reference(), private.run_booking_jobs(),
   public.guest_create_booking(jsonb, text, text), public.guest_get_booking(text, text),

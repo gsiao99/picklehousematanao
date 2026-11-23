@@ -2,9 +2,10 @@
 """
 Concurrency test for the booking engine, using real parallel sessions.
 
-Each worker is a separate psql connection acting as a different player. All
-workers wait on a shared advisory lock held by a controller session; when the
-controller lets go, they all call hold_slots() at the same moment.
+Each worker is a separate psql connection: an anonymous guest booking through
+guest_create_booking(), or (for the event races, until Phase 2) a player
+account. All workers wait on a shared advisory lock held by a controller
+session; when the controller lets go, they all make their call at once.
 
 Run after scripts/local-db/run-tests.sh (which leaves dd_test migrated):
     python3 scripts/local-db/concurrency-test.py
@@ -32,20 +33,26 @@ def check(name: str, ok: bool, detail: str = "") -> None:
     results.append((ok, name, detail))
 
 
+TEST_DAY = None  # tomorrow's operating date, worked out once (guests cannot call private helpers)
+
+
 def hour(h: int) -> str:
-    return f"(((private.operating_date_of(now()) + 1)::timestamp + interval '{h} hours') at time zone 'Asia/Manila')"
+    return f"(('{TEST_DAY}'::date::timestamp + interval '{h} hours') at time zone 'Asia/Manila')"
 
 
 def slot(court: int, h: int) -> str:
-    return f"jsonb_build_object('court_id', (select id from public.courts where number = {court}), 'starts_at', {hour(h)})"
+    court_id = COURTS[court]
+    return f"jsonb_build_object('court_id', '{court_id}'::uuid, 'starts_at', {hour(h)})"
 
 
-def worker(user_id: str, call: str):
-    """One player session: wait at the barrier, then make the call."""
+def worker(user_id, call: str):
+    """One session (a guest when user_id is None): wait at the barrier, then make the call."""
+    role = "anon" if user_id is None else "authenticated"
+    claims = '{"role":"anon"}' if user_id is None else f'{{"sub":"{user_id}","role":"authenticated"}}'
     script = f"""
 begin;
-set local role authenticated;
-select set_config('request.jwt.claims', '{{"sub":"{user_id}","role":"authenticated"}}', true);
+set local role {role};
+select set_config('request.jwt.claims', '{claims}', true);
 select pg_advisory_xact_lock_shared({BARRIER});
 select {call};
 commit;
@@ -66,6 +73,11 @@ def race(calls):
     return out
 
 
+def book(slots, i: int) -> str:
+    """A guest booking call; i picks a distinct mobile number."""
+    return f"(public.guest_create_booking(jsonb_build_array({','.join(slots)}), 'Racer {i}', '0917{i:07d}')).reference"
+
+
 def live_holders(court: int, h: int) -> int:
     return int(sql(f"""select count(*) from public.booking_slots s
       where s.court_id = (select id from public.courts where number = {court})
@@ -79,62 +91,69 @@ def live_holders(court: int, h: int) -> int:
 users = [str(uuid.uuid4()) for _ in range(20)]
 values = ",".join(f"('{u}', 'racer{i}@test.local', '{{\"full_name\":\"Racer {i}\"}}')" for i, u in enumerate(users))
 sql(f"insert into auth.users (id, email, raw_user_meta_data) values {values}")
+# Event races (F-H) still use player accounts until Phase 2.
+sql("insert into public.user_roles (user_id, role) select id, 'player' from auth.users where email like 'racer%@test.local'")
+sql("insert into public.courts (number, name, sort_order) values (1, 'Court 1', 1), (2, 'Court 2', 2), (3, 'Court 3', 3)")
+COURTS = dict((int(n), i) for n, i in (row.split("|") for row in sql("select number, id from public.courts").splitlines()))
+TEST_DAY = sql("select private.operating_date_of(now()) + 1")
 sql("delete from public.operating_hours; insert into public.operating_hours (weekday, opens_at, closes_at) "
     "select d, '06:00', '01:00' from generate_series(0, 6) d")
 sql("delete from public.rate_rules; insert into public.rate_rules (product, label, starts_at, ends_at, price_centavos, unit) "
     "values ('court_rental', 'Concurrency test rate', '06:00', '01:00', 10000, 'per_court_hour')")
-sql("update public.venue_settings set max_slots_per_booking = 20")
+sql("update public.venue_settings set max_slots_per_booking = 20, guest_bookings_per_hour = 100")
 
 try:
-    # A. 20 players, the same slot, the same instant
-    out = race([(u, f"public.hold_slots(jsonb_build_array({slot(1, 14)}))") for u in users])
+    # A. 20 guests, the same slot, the same instant
+    out = race([(None, book([slot(1, 14)], i)) for i in range(20)])
     wins = sum(ok for ok, _ in out)
     taken = sum("was just taken" in msg for ok, msg in out if not ok)
-    check("A. 20 simultaneous holds on one slot: exactly one succeeds", wins == 1, f"{wins} succeeded")
-    check("A. the other 19 get the 'just taken' message", taken == 19, f"{taken} got it; sample: {out[0][1][:160]}")
+    check("A. 20 simultaneous bookings of one slot: exactly one succeeds", wins == 1, f"{wins} succeeded")
+    check("A. the other 19 get the 'just taken' message", taken == 19,
+          f"{taken} got it; others: " + " || ".join(m for ok, m in out if not ok and "was just taken" not in m)[:1500])
     check("A. the database holds exactly one live slot", live_holders(1, 14) == 1)
 
-    # B. 20 players, 20 different slots, the same instant
+    # B. 20 guests, 20 different slots, the same instant
     pairs = [(c, h) for c in (1, 2, 3) for h in range(15, 22)][:20]
-    out = race([(u, f"public.hold_slots(jsonb_build_array({slot(c, h)}))") for u, (c, h) in zip(users, pairs)])
-    check("B. 20 simultaneous holds on different slots all succeed", all(ok for ok, _ in out),
+    out = race([(None, book([slot(c, h)], 100 + i)) for i, (c, h) in enumerate(pairs)])
+    check("B. 20 simultaneous bookings of different slots all succeed", all(ok for ok, _ in out),
           "; ".join(m for ok, m in out if not ok)[:300])
 
     # C. Overlapping multi-slot requests in opposite orders (deadlock bait)
     reqs = []
-    for i, u in enumerate(users[:10]):
+    for i in range(10):
         hours = [8, 9, 10, 11] if i % 2 == 0 else [11, 10, 9, 8]
-        reqs.append((u, "public.hold_slots(jsonb_build_array(" + ",".join(slot(2, h) for h in hours) + "))"))
+        reqs.append((None, book([slot(2, h) for h in hours], 200 + i)))
     out = race(reqs)
     wins = sum(ok for ok, _ in out)
     deadlocks = sum("deadlock" in m for ok, m in out if not ok)
     check("C. overlapping multi-slot requests: exactly one wins all four hours", wins == 1, f"{wins} succeeded")
-    check("C. no deadlocks", deadlocks == 0, f"{deadlocks} deadlocks")
+    check("C. no deadlocks", deadlocks == 0, f"{deadlocks} deadlocks: " + " || ".join(m for ok, m in out if not ok and "deadlock" in m)[:1500])
     check("C. each of those hours has exactly one live holder",
           all(live_holders(2, h) == 1 for h in (8, 9, 10, 11)))
 
-    # D. One player, five parallel requests: one cart, five slots
-    me = users[19]
-    out = race([(me, f"public.hold_slots(jsonb_build_array({slot(3, h)}))") for h in (8, 9, 10, 11, 12)])
-    carts = int(sql(f"select count(*) from public.bookings where player_id = '{me}' and status = 'held'"))
-    slots = int(sql(f"select count(*) from public.booking_slots s join public.bookings b on b.id = s.booking_id "
-                    f"where b.player_id = '{me}' and b.status = 'held' and s.status = 'held'"))
-    check("D. parallel requests from one player all succeed", all(ok for ok, _ in out),
-          "; ".join(m for ok, m in out if not ok)[:300])
-    check("D. they land in a single cart", carts == 1, f"{carts} carts, {slots} slots")
+    # D. One mobile number, five parallel bookings, a limit of three per hour
+    sql("update public.venue_settings set guest_bookings_per_hour = 3")
+    out = race([(None, book([slot(3, h)], 300)) for h in (8, 9, 10, 11, 12)])
+    wins = sum(ok for ok, _ in out)
+    limited = sum("Too many bookings" in m for ok, m in out if not ok)
+    check("D. the per-number limit holds under parallel requests (3 of 5)", wins == 3 and limited == 2,
+          f"{wins} succeeded, {limited} limited; " + "; ".join(m for ok, m in out if not ok)[:200])
+    sql("update public.venue_settings set guest_bookings_per_hour = 100")
 
-    # E. Confirm racing against expiry: an expired hold cannot be confirmed
-    sql(f"update public.bookings set hold_expires_at = now() - interval '1 second' "
-        f"where player_id = '{me}' and status = 'held'")
-    booking = sql(f"select id from public.bookings where player_id = '{me}' and status = 'held'")
-    out = race([(me, f"(public.confirm_booking('{booking}')).status")] +
-               [(u, f"public.hold_slots(jsonb_build_array({slot(3, 8)}))") for u in users[10:14]])
-    confirm_status = out[0][1].splitlines()[-1] if out[0][0] else out[0][1]
-    takers = sum(ok for ok, _ in out[1:])
-    check("E. confirming an expired hold reports 'expired'", "expired" in confirm_status, confirm_status[:160])
-    check("E. exactly one other player gets the released time", takers == 1, f"{takers} succeeded")
-    check("E. the released hour has exactly one live holder", live_holders(3, 8) == 1)
-    # F. Capacity under a rush: 12 players register for 3 places at once
+    # E. Two cancellations of the same booking at once: exactly one goes through
+    sql("create table if not exists public.race_tokens (reference text, token text); grant all on public.race_tokens to anon")
+    sql("insert into public.race_tokens select reference, token from public.guest_create_booking("
+        f"jsonb_build_array({slot(1, 23)}), 'Racer E', '09170000400')")
+    ref, tok = sql("select reference || '|' || token from public.race_tokens limit 1").split("|")
+    out = race([(None, f"public.guest_cancel_booking('{ref}', '{tok}') ->> 'status'")] * 2)
+    wins = sum(ok for ok, _ in out)
+    again = sum("already cancelled" in m for ok, m in out if not ok)
+    check("E. two simultaneous cancellations: one succeeds, the other is told it is already cancelled",
+          wins == 1 and again == 1, "; ".join(m for _, m in out)[:200])
+    check("E. the cancelled hour is free", live_holders(1, 23) == 0)
+    sql("drop table public.race_tokens")
+
+    # F. Capacity under a rush (player accounts until Phase 2): 12 players register for 3 places at once
     sql("insert into public.events (id, slug, title, event_type, starts_at, ends_at, capacity, status) values "
         "('f0000000-0000-4000-8000-000000000001', 'race-night', 'Race Night', 'social', now() + interval '2 days', "
         "now() + interval '2 days 2 hours', 3, 'registration_open')")
@@ -176,7 +195,8 @@ finally:
     sql("delete from public.queue_entries; delete from public.queue_games; delete from public.check_ins; ")
     sql("delete from public.event_registrations; delete from public.events where slug like 'race-night%'; ")
     sql("delete from public.booking_slots; delete from public.bookings; delete from public.rate_rules; "
-        "delete from public.operating_hours; update public.venue_settings set max_slots_per_booking = 8")
+        "delete from public.operating_hours; update public.venue_settings set max_slots_per_booking = 8, guest_bookings_per_hour = 10")
+    sql("delete from public.courts")
     ids = ",".join(f"'{u}'" for u in users)
     sql(f"delete from auth.users where id in ({ids})")
 
